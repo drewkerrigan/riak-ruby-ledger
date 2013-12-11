@@ -34,6 +34,8 @@ module Riak::Ledger
     elsif !obj.raw_data.nil?
       candidate.counter.merge(actor, TPNCounter.from_json(obj.raw_data)))
     end
+
+    return candidate
   end
 
   def value
