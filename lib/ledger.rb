@@ -11,7 +11,32 @@ module Riak::Ledger
     self.counter = TPNCounter.new()
   end
 
-  def self.find(actor, client, bucket, key)
+  #def self.find(actor, client, bucket, key)
+  #  obj = client[bucket].get_or_new(key)
+  #  return if obj.nil?
+  #
+  #  candidate = new(nil, client, bucket, key)
+  #
+  #  if obj.siblings.length > 1
+  #    index_obj.siblings.each do | o |
+  #      unless o.raw_data.nil? or o.raw_data.empty?
+  #        candidate.counter.merge(actor, TPNCounter.from_json(o.raw_data))
+  #      end
+  #    end
+  #
+  #    resolved_obj = client[bucket].new(key)
+  #    resolved_obj.vclock = obj.vclock
+  #
+  #    # previous content type was mulitpart/mixed, needs to change
+  #    resolved_obj.content_type = 'application/json'
+  #    resolved_obj.raw_data = candidate.counter.to_json
+  #    resolved_obj.store(options={:returnbody => false})
+  #  elsif !obj.raw_data.nil?
+  #    candidate.counter.merge(actor, TPNCounter.from_json(obj.raw_data))
+  #  ends
+  #end
+
+  def self.find!(actor, client, bucket, key)
     obj = client[bucket].get_or_new(key)
     return if obj.nil?
 
@@ -32,18 +57,35 @@ module Riak::Ledger
       resolved_obj.raw_data = candidate.counter.to_json
       resolved_obj.store(options={:returnbody => false})
     elsif !obj.raw_data.nil?
-      candidate.counter.merge(actor, TPNCounter.from_json(obj.raw_data)))
+      candidate.counter.merge(actor, TPNCounter.from_json(obj.raw_data))
     end
 
     return candidate
+  end
+
+  def has_transaction?()
+
+  end
+
+  # Take a look at all transactions in actor sets
+  def inspect()
+
+  end
+
+  def merge!(other)
+    candidate.counter.merge(actor, other.counter)
   end
 
   def value
     counter.value
   end
 
-  def increment(transaction, value)
+  def credit(transaction, value)
     counter.increment(actor, transaction, value)
+  end
+
+  def debit(transaction, value)
+    counter.decrement(actor, transaction, value)
   end
 
   def save()
