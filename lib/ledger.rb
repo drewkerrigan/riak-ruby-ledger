@@ -15,7 +15,7 @@ module Riak::Ledger
     obj = client[bucket].get_or_new(key)
     return if obj.nil?
 
-    candidate = new(client, bucket, key)
+    candidate = new(actor, client, bucket, key)
 
     if obj.siblings.length > 1
       index_obj.siblings.each do | o |
