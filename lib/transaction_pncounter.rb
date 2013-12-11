@@ -37,6 +37,10 @@ module Riak::Ledger
       p.value - n.value
     end
 
+    def has_transaction?(transaction)
+      p.has_transaction?(transaction) || n.has_transaction?(transaction)
+    end
+
     def merge(actor, other)
       p.merge(actor, other.p)
       n.merge(actor, other.n)

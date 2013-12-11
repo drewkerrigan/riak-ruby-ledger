@@ -3,11 +3,12 @@ require 'set'
 module Riak::Ledger
   class TGCounter
     attr_accessor :counts
-    def initialize
+
+    def initialize()
       self.counts = Hash.new()
     end
 
-    def to_json
+    def to_json()
       {
           type: 'TGCounter',
           c: counts
@@ -28,14 +29,22 @@ module Riak::Ledger
       counts[actor][transaction] = value
     end
 
-    def value
-      transactions = Hash.new()
+    def value()
+      transactions().values.inject(0, &:+)
+    end
+
+    def transactions()
+      txns = Hash.new()
 
       counts.values.each do |t,v|
-        transactions[t] = v
+        txns[t] = v
       end
 
-      transactions.values.inject(0, &:+)
+      txns
+    end
+
+    def has_transaction()
+      transactions().keys.member?(transaction)
     end
 
     # Cannot modify other actors' sets because of possible simultaneous merges
