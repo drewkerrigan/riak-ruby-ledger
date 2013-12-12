@@ -37,21 +37,13 @@ ledger = Riak::Ledger.new(client, bucket, key, Thread.current["name"])
 
 ```
 ledger.credit("transaction1", 50)
-
 ledger.debit("transaction2", 10)
-
 ledger.value # 40
-
 ledger.debit("transaction2", 10)
-
 ledger.value # still 40
-
 ledger.save
-
 ledger = Ledger.find(client, bucket, key, "ACTOR2")
-
 ledger.debit("transaction2", 10)
-
 ledger.value # still 40
 ```
 
@@ -59,20 +51,14 @@ ledger.value # still 40
 
 ```
 ledger = Ledger.find!(client, bucket, key, "ACTOR1")
-
 ledger.value #still 40
-
 ledger.debit("transaction2", 10)
-
 ledger.value #now 30, after merge, transaction ids are no longer present
-
 ledger.has_transaction? "transaction2" #true
 ledger.has_transaction? "transaction1" #false
-
 ledger.save
 
 ledger = Ledger.find!(client, bucket, key, "ACTOR1")
-
 ledger.has_transaction? "transaction2" #false
 ```
 

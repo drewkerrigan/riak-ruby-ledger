@@ -1,3 +1,5 @@
+require 'tgcounter'
+
 module Riak::Ledger
   class TPNCounter
     attr_accessor :p, :n
