@@ -36,14 +36,16 @@ module Riak::Ledger
     def transactions()
       txns = Hash.new()
 
-      counts.values.each do |t,v|
-        txns[t] = v
+      counts.values.each do |txn|
+        txn.each do |t,v|
+          txns[t] = v
+        end
       end
 
       txns
     end
 
-    def has_transaction()
+    def has_transaction?(transaction)
       transactions().keys.member?(transaction)
     end
 

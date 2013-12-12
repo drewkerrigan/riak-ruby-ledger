@@ -1,5 +1,6 @@
 require 'ledger/version'
 require 'tpncounter'
+require 'json'
 
 module Riak
   module Ledger
