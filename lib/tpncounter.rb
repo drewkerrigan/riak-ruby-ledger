@@ -1,6 +1,6 @@
 require 'tgcounter'
 
-module Riak::Ledger
+module Riak::CRDT
   class TPNCounter
     attr_accessor :p, :n
     def initialize

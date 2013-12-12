@@ -1,5 +1,5 @@
 module Riak
-  module Ledger
+  class Ledger
     VERSION = "0.0.1"
   end
 end

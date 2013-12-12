@@ -3,7 +3,7 @@ require 'tpncounter'
 require 'json'
 
 module Riak
-  module Ledger
+  class Ledger
     attr_accessor :client, :bucket, :key, :actor, :counter
 
     def initialize(client, bucket, key, actor)

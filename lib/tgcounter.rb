@@ -1,6 +1,6 @@
 require 'set'
 
-module Riak::Ledger
+module Riak::CRDT
   class TGCounter
     attr_accessor :counts
 
@@ -53,6 +53,7 @@ module Riak::Ledger
     def merge(actor, other)
       new_keys = Set.new
       counts[actor] = Hash.new unless counts[actor]
+      other.counts[actor] = Hash.new unless other.counts[actor]
       new_keys.merge counts[actor].keys
       new_keys.merge other.counts[actor].keys if other.counts[actor]
 
