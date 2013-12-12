@@ -70,7 +70,17 @@ describe Riak::Ledger do
 
     counter.merge("actor1", counter2)
 
-    assert_equal({}, counter.counts)
+    assert_equal(20, counter.counts["actor1"]["total"])
+
+    counter.merge("actor2", counter2)
+
+    assert_equal(10, counter.counts["actor2"]["total"])
+
+    counter.merge("actor3", counter2)
+
+    assert_equal(20, counter.counts["actor3"]["total"])
+
+    assert_equal(nil, counter.counts["actor4"])
   end
 
 end

@@ -5,7 +5,7 @@ module Riak::Ledger
     attr_accessor :counts
 
     def initialize()
-      self.counts = Hash.new({0})
+      self.counts = Hash.new()
     end
 
     def to_json()
@@ -57,7 +57,8 @@ module Riak::Ledger
       new_keys.merge other.counts[actor].keys if other.counts[actor]
 
       new_keys.each do |k|
-
+        counts[actor][k] = 0 unless counts[actor][k]
+        other.counts[actor][k] = 0 unless other.counts[actor][k]
         counts[actor][k] = [counts[actor][k], other.counts[actor][k]].max
       end
 
