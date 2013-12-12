@@ -1,6 +1,6 @@
 require_relative '../test_helper'
 
-describe Riak::Ledger do
+describe Riak::Ledger::TGCounter do
 
   it "must have empty counts on new" do
     assert_equal({}, Riak::Ledger::TGCounter.new().counts)
@@ -82,5 +82,4 @@ describe Riak::Ledger do
 
     assert_equal(nil, counter.counts["actor4"])
   end
-
 end
