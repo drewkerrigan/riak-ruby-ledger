@@ -59,9 +59,18 @@ describe Riak::Ledger do
     counter.increment("actor2", "txn2", 10)
     counter.increment("actor3", "txn1", 10)
     counter.increment("actor3", "txn1", 10)
-    counter.increment("actor3", "txn1", 10)
+    counter.increment("actor3", "txn3", 10)
 
-    assert_equal({}, counter.merge("actor", ))
+    counter2 = Riak::Ledger::TGCounter.new()
+    counter2.increment("actor5", "txn1", 10)
+    counter2.increment("actor2", "txn2", 10)
+    counter2.increment("actor1", "txn3", 10)
+    counter2.increment("actor3", "txn1", 10)
+    counter2.increment("actor6", "txn1", 10)
+
+    counter.merge("actor1", counter2)
+
+    assert_equal({}, counter.counts)
   end
 
 end
