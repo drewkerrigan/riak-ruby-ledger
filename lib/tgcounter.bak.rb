@@ -5,13 +5,13 @@ module Riak::CRDT
     attr_accessor :counts
 
     def initialize()
-      self.counts = TransactionList.new()
+      self.counts = Hash.new()
     end
 
-    def to_json
+    def to_json()
       {
           type: 'TGCounter',
-          c: counts.transactions
+          c: counts
       }.to_json
     end
 
@@ -25,60 +25,35 @@ module Riak::CRDT
     end
 
     def increment(actor, transaction, value)
-      counts += Transaction.new(actor, transaction, value)
-    end
-
-    def has_transaction?(transaction)
-      counts.each do |actor, txns|
-        txns.keys.member?(transaction)
-      end
+      counts[actor] = Hash.new() unless counts[actor]
+      counts[actor][transaction] = value
     end
 
     def value()
-      counts.values.inject(0, &:+)
+      transactions().values.inject(0, &:+)
     end
 
-    def merge(other)
-      new_keys = Set.new
-      new_keys.merge counts.keys
-      new_keys.merge other.counts.keys
+    def transactions()
+      txns = Hash.new()
 
-      new_keys.each do |k|
-        counts[k] = [counts[k], other.counts[k]].max
+      counts.values.each do |actor|
+        actor.each do |t,v|
+          if t == "total"
+            txns[t] = 0 unless txns[t]
+            txns[t] += v
+          else
+            txns[t] = v
+          end
+
+        end
       end
+
+      txns
     end
 
-    def tag
-      radix = 36
-      [
-          object_id.to_s(radix),
-          Process.uid.to_s(radix),
-          Process.gid.to_s(radix),
-          Process.pid.to_s(radix),
-          `hostname`.strip
-      ].join
+    def has_transaction?(transaction)
+      transactions().keys.member?(transaction)
     end
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
     # Cannot modify other actors' sets because of possible simultaneous merges
     def merge(actor, other)
@@ -115,27 +90,6 @@ module Riak::CRDT
 
       counts[actor] = Hash.new()
       counts[actor]["total"] = actor_total
-    end
-  end
-end
-
-module Riak::CRDT
-  class Transaction
-    attr_accessor :id, :value
-
-    def initialize(id, value)
-      self.id = id
-      self.value = value
-    end
-  end
-end
-
-module Riak::CRDT
-  class TransactionList
-    attr_accessor :transactions
-
-    def initialize()
-      self.transactions = Hash.new()
     end
   end
 end

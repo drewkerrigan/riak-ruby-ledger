@@ -21,4 +21,5 @@ Gem::Specification.new do |spec|
   spec.add_development_dependency "bundler", "~> 1.3"
   spec.add_development_dependency "rake"
   spec.add_development_dependency "json"
+  #spec.add_development_dependency "riak-client", :git => 'git://github.com/basho/riak-ruby-client.git' 
 end
