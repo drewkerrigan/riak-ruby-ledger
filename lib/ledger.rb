@@ -4,94 +4,168 @@ require 'json'
 
 module Riak
   class Ledger
-    attr_accessor :client, :bucket, :key, :actor, :counter
+    attr_accessor :bucket, :key, :counter, :retry_count, :counter_options
 
-    def initialize(client, bucket, key, actor)
-      self.actor = actor
-      self.client = client
+    # Create a new Ledger object
+    # @param [Riak::Bucket] bucket
+    # @param [String] key
+    # @param [Hash] options
+    #   {
+    #     :actor [String]: default Thread.current["name"] || "ACTOR1"
+    #     :history_length [Integer]: default 10
+    #     :retry_count [Integer]: default 10
+    #   }
+    def initialize(bucket, key, options={})
       self.bucket = bucket
       self.key = key
-      self.counter = Riak::CRDT::TPNCounter.new()
+      self.retry_count = options[:retry_count] || 10
 
-      if !client[bucket].allow_mult
-        client[bucket].allow_mult = true
+      self.counter_options = {}
+      self.counter_options[:actor] = options[:actor] || Thread.current["name"] || "ACTOR1"
+      self.counter_options[:history_length] = options[:history_length] || 10
+      self.counter = Riak::CRDT::TPNCounter.new(self.counter_options)
+
+      unless bucket.allow_mult
+        bucket.allow_mult = true
       end
     end
 
-    def self.from_robj(client, bucket, key, actor = nil, obj)
-      candidate = new(client, bucket, key, actor)
+    # Find an existing Ledger object, merge and save it
+    # @param [Riak::Bucket] bucket
+    # @param [String] key
+    # @param [Hash] options
+    #   {
+    #     :actor [String]: default Thread.current["name"] || "ACTOR1"
+    #     :history_length [Integer]: default 10
+    #     :retry_count [Integer]: default 10
+    #   }
+    # @return [Riak::Ledger]
+    def self.find!(bucket, key, options={})
+      candidate = new(bucket, key, options)
+      vclock = candidate.refresh()
+      candidate.save(vclock)
 
-      if obj.siblings.length > 1
-        obj.siblings.each do | o |
-          unless o.raw_data.nil? or o.raw_data.empty?
-            candidate.counter.merge(actor, Riak::CRDT::TPNCounter.from_json(o.raw_data))
-          end
+      return candidate
+    end
+
+    # Increment the counter, merge and save it
+    # @param [String] transaction
+    # @param [Positive Integer] value
+    # @see update!(transaction, value)
+    # @return [Boolean]
+    def credit!(transaction, value)
+      update!(transaction, value)
+    end
+
+    # Decrement the counter, merge and save it
+    # @param [String] transaction
+    # @param [Positive Integer] value
+    # @see update!(transaction, value)
+    # @return [Boolean]
+    def debit!(transaction, value)
+      update!(transaction, value * -1)
+    end
+
+    # Update the counter, merge and save it. Retry if unsuccessful
+    # @param [String] transaction
+    # @param [Integer] value
+    # @param [Integer] current_retry
+    # @return [Boolean]
+    def update!(transaction, value, current_retry=nil)
+      # Failure case, not able to successfully complete the operation, retry a.s.a.p.
+      if current_retry && current_retry <= 0
+        return false
+      end
+
+      # Get the current merged state of this counter
+      vclock = refresh()
+
+
+      if has_transaction?(transaction)
+        # If the transaction already exists in the counter, no problem
+        return true
+      else
+        # If the transaction doesn't exist, attempt to add it and save
+        if value < 0
+          counter.decrement(transaction, value * -1)
+        else
+          counter.increment(transaction, value)
         end
 
-      elsif !obj.raw_data.nil?
-        candidate.counter.merge(actor, Riak::CRDT::TPNCounter.from_json(obj.raw_data))
+        unless save(vclock)
+          # If the save wasn't successful, retry
+          current_retry = retry_count unless current_retry
+          update!(transaction, value, current_retry - 1)
+        else
+          # If the save succeeded, no problem
+          return true
+        end
       end
-
-      return candidate
     end
 
-    def self.find(client, bucket, key, actor = nil)
-      obj = client[bucket].get_or_new(key)
-      return if obj.nil?
-
-      from_robj(client, bucket, key, actor, obj)
-    end
-
-    def self.find!(client, bucket, key, actor)
-      obj = client[bucket].get_or_new(key)
-      return if obj.nil?
-
-      candidate = from_robj(client, bucket, key, nil, obj)
-      candidate.counter.p.merge_actor(actor, Riak::CRDT::TGCounter.new())
-      candidate.counter.n.merge_actor(actor, Riak::CRDT::TGCounter.new())
-
-      resolved_obj = client[bucket].new(key)
-      resolved_obj.vclock = obj.vclock
-
-      # previous content type was mulitpart/mixed, needs to change
-      resolved_obj.content_type = 'application/json'
-      resolved_obj.raw_data = candidate.counter.to_json
-      resolved_obj.store(options={:returnbody => false})
-
-      return candidate
-    end
-
+    # Create a new Ledger object
+    # @param [String] transaction
+    # @return [Boolean]
     def has_transaction?(transaction)
       counter.has_transaction?(transaction)
     end
 
-    # Take a look at all transactions in actor sets
-    def to_json()
-      counter.to_json
-    end
-
-    def value
+    # Calculate the current value of the counter
+    # @return [Integer]
+    def value()
       counter.value
     end
 
-    def credit(transaction, value)
-      counter.increment(actor, transaction, value)
+    # Delete the counter
+    # @return [Boolean]
+    def delete()
+      begin
+        bucket.delete(key)
+        return true
+      rescue => e
+        return false
+      end
     end
 
-    def debit(transaction, value)
-      counter.decrement(actor, transaction, value)
+    # Get the current state of the counter and merge it
+    # @return [String]
+    def refresh()
+      obj = bucket.get_or_new(key)
+      return if obj.nil?
+
+      if obj.siblings.length > 1
+        obj.siblings.each do | sibling |
+          unless sibling.raw_data.nil? or sibling.raw_data.empty?
+            counter.merge(Riak::CRDT::TPNCounter.from_json(sibling.raw_data, self.counter_options))
+          end
+        end
+      elsif !obj.raw_data.nil?
+        counter.merge(Riak::CRDT::TPNCounter.from_json(obj.raw_data, self.counter_options))
+      end
+
+      return obj.vclock
     end
 
-    def save()
-      object = @client[bucket].new(key)
+    # Save the counter with an optional vclock
+    # @param [String] vclock
+    # @return [Boolean]
+    def save(vclock=nil)
+      object = bucket.new(key)
+      object.vclock = vclock if vclock
       object.content_type = 'application/json'
       object.raw_data = to_json
 
-      object.store(options={:returnbody => false})
+      begin
+        options = {:returnbody => false}
+        object.store(options)
+        return true
+      rescue => e
+        return false
+      end
     end
 
-    def delete()
-      @client[bucket].delete(key)
+    def to_json()
+      counter.to_json
     end
   end
 end
