@@ -18,8 +18,8 @@ module Riak::CRDT
     def to_json
       {
           type: 'TPNCounter',
-          p: p.counts,
-          n: n.counts
+          p: p.to_hash,
+          n: n.to_hash
       }.to_json
     end
 
@@ -28,8 +28,8 @@ module Riak::CRDT
       raise ArgumentError.new 'unexpected type field in JSON' unless h['type'] == 'TPNCounter'
 
       pnc = new(options)
-      pnc.p.counts = h['p']
-      pnc.n.counts = h['n']
+      pnc.p = TGCounter.from_hash(h['p'], options)
+      pnc.n = TGCounter.from_hash(h['n'], options)
 
       return pnc
     end

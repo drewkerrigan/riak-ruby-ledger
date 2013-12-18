@@ -5,13 +5,17 @@ describe Riak::CRDT::TGCounter do
   options2 = {:actor => "ACTOR2", :history_length => 5}
 
   it "must have empty counts on new" do
-    assert_equal({"ACTOR1"=>{"total"=>0, "txns"=>{}}}, Riak::CRDT::TGCounter.new(options1).counts)
+    counter = Riak::CRDT::TGCounter.new(options1)
+    assert_equal(0, counter.counts["ACTOR1"]["total"])
+    assert_equal([], counter.counts["ACTOR1"]["txns"].arr)
   end
 
   it "must increment" do
     counter = Riak::CRDT::TGCounter.new(options1)
     counter.increment("txn1", 10)
-    assert_equal({"ACTOR1"=>{"total"=>0, "txns"=>{"txn1"=>10}}}, counter.counts)
+
+    assert_equal(0, counter.counts["ACTOR1"]["total"])
+    assert_equal(10, counter.counts["ACTOR1"]["txns"]["txn1"])
   end
 
   it "must have value" do
@@ -43,7 +47,7 @@ describe Riak::CRDT::TGCounter do
   end
 
   it "must translate to and from json" do
-    json = "{\"type\":\"TGCounter\",\"c\":{\"ACTOR1\":{\"total\":0,\"txns\":{\"txn1\":10,\"txn2\":10}}}}"
+    json = "{\"type\":\"TGCounter\",\"c\":{\"ACTOR1\":{\"total\":0,\"txns\":[[\"txn1\",10],[\"txn2\",10]]}}}"
     counter = Riak::CRDT::TGCounter.new(options1)
     counter.increment("txn1", 10)
     counter.increment("txn2", 10)

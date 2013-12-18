@@ -5,8 +5,8 @@ describe Riak::CRDT::TPNCounter do
   options2 = {:actor => "ACTOR2", :history_length => 5}
 
   it "must have empty counts on new" do
-    assert_equal({"ACTOR1"=>{"total"=>0, "txns"=>{}}}, Riak::CRDT::TPNCounter.new(options1).p.counts)
-    assert_equal({"ACTOR1"=>{"total"=>0, "txns"=>{}}}, Riak::CRDT::TPNCounter.new(options1).n.counts)
+    assert_equal({:type=>"TGCounter", :c=>{"ACTOR1"=>{"total"=>0, "txns"=>[]}}}, Riak::CRDT::TPNCounter.new(options1).p.to_hash)
+    assert_equal({:type=>"TGCounter", :c=>{"ACTOR1"=>{"total"=>0, "txns"=>[]}}}, Riak::CRDT::TPNCounter.new(options1).n.to_hash)
   end
 
   it "must increment and decrement" do
@@ -43,7 +43,7 @@ describe Riak::CRDT::TPNCounter do
   end
 
   it "must translate to and from json" do
-    json = "{\"type\":\"TPNCounter\",\"p\":{\"ACTOR1\":{\"total\":0,\"txns\":{\"txn1\":10}}},\"n\":{\"ACTOR1\":{\"total\":0,\"txns\":{\"txn2\":5}}}}"
+    json = "{\"type\":\"TPNCounter\",\"p\":{\"type\":\"TGCounter\",\"c\":{\"ACTOR1\":{\"total\":0,\"txns\":[[\"txn1\",10]]}}},\"n\":{\"type\":\"TGCounter\",\"c\":{\"ACTOR1\":{\"total\":0,\"txns\":[[\"txn2\",5]]}}}}"
     counter = Riak::CRDT::TPNCounter.new(options1)
     counter.increment("txn1", 10)
     counter.decrement("txn2", 5)
@@ -52,6 +52,7 @@ describe Riak::CRDT::TPNCounter do
 
     assert_equal json, counter.to_json
 
+    {"type"=>"TGCounter", "c"=>{"ACTOR1"=>{"total"=>0, "txns"=>[["txn1", 10]]}}}
     assert_equal c2.p.counts, Riak::CRDT::TPNCounter.from_json(json, options1).p.counts
     assert_equal c2.n.counts, Riak::CRDT::TPNCounter.from_json(json, options1).n.counts
   end

@@ -16,28 +16,47 @@ module Riak::CRDT
       self.counts = Hash.new()
       self.counts[self.actor] = Hash.new()
       self.counts[self.actor]["total"] = 0
-      self.counts[self.actor]["txns"] = Hash.new()
-      self.counts[self.actor]["time"] = Hash.new()
+      self.counts[self.actor]["txns"] = TransactionArray.new()
+    end
+
+    def to_hash
+      c = Hash.new()
+      counts.each do |a, values|
+        c[a] = Hash.new()
+        c[a]["total"] = values["total"]
+        c[a]["txns"] = values["txns"].arr
+      end
+
+      {
+          type: 'TGCounter',
+          c: c
+      }
     end
 
     def to_json
-      {
-          type: 'TGCounter',
-          c: counts
-      }.to_json
+      to_hash.to_json
+    end
+
+    def self.from_hash(h, options)
+      gc = new(options)
+
+      h['c'].each do |a, values|
+        gc.counts[a] = Hash.new() unless gc.counts[a]
+        gc.counts[a]["total"] = values["total"]
+        gc.counts[a]["txns"] = TransactionArray.new(values["txns"])
+      end
+
+      return gc
     end
 
     def self.from_json(json, options)
       h = JSON.parse json
       raise ArgumentError.new 'unexpected type field in JSON' unless h['type'] == 'TGCounter'
 
-      gc = new(options)
-      gc.counts = h['c']
-      return gc
+      from_hash(h, options)
     end
 
     def increment(transaction, value)
-      counts[actor]["time"][Time.now().to_f] = transaction
       counts[actor]["txns"][transaction] = value
     end
 
@@ -46,8 +65,8 @@ module Riak::CRDT
 
       counts.each do |a, values|
         unless a == ignore_actor
-          values["txns"].each do |txn, val|
-              txns[txn] = val
+          values["txns"].arr.each do |arr|
+              txns[arr[0]] = arr[1]
           end
         end
       end
@@ -79,9 +98,10 @@ module Riak::CRDT
           counts[other_actor]["total"] = [counts[other_actor]["total"], other_values["total"]].max
 
           # Max of unique transactions
-          other_values["txns"].each do |other_txn, other_value|
-            counts[other_actor]["txns"][other_txn] = 0 unless counts[other_actor]["txns"][other_txn]
-            counts[other_actor]["txns"][other_txn] = [counts[other_actor]["txns"][other_txn], other_value].max
+          other_values["txns"].arr.each do |arr|
+            other_txn, other_value = arr
+            mine = (counts[other_actor]["txns"][other_txn]) ? counts[other_actor]["txns"][other_txn] : 0
+            counts[other_actor]["txns"][other_txn] = [mine, other_value].max
           end
         else
           counts[other_actor] = other_values
@@ -91,24 +111,49 @@ module Riak::CRDT
       # Remove duplicate transactions if other actors have claimed them
       unique_transactions(actor).keys.each do |txn|
         counts[actor]["txns"].delete(txn)
-        counts[actor]["time"].delete(txn)
       end
 
       # Merge this actor's data based on history_length
       total = 0
       if counts[actor]["txns"].length > history_length
         to_delete = counts[actor]["txns"].length - history_length
-
-        times = counts[actor]["time"].clone
-
-        times.keys.sort[0..to_delete].each do |k|
-          txnid = counts[actor]["time"][k]
-          counts[actor]["time"].delete(k)
-          total += counts[actor]["txns"][txnid]
-          counts[actor]["txns"].delete(txnid)
+        counts[actor]["txns"].arr.slice!(0..to_delete - 1).each do |arr|
+          total += arr[1]
         end
       end
       counts[actor]["total"] += total
     end
+  end
+end
+
+class TransactionArray
+
+  attr_accessor :arr
+
+  def initialize(arr=Array.new())
+    self.arr = arr
+  end
+
+  def length()
+    self.arr.length
+  end
+
+  def ==(other)
+    self.arr == other.arr
+  end
+
+  def []=(key, value)
+    self.delete(key) if self.[](key)
+    self.arr << [key, value]
+  end
+
+  def [](key)
+    res = self.arr.select { |a| a[0] == key }
+    res.first[1] if res && res.length > 0 &&res.first.length == 2
+  end
+
+  def delete(key)
+    index = self.arr.index { |a| a[0] == key }
+    self.arr.delete_at(index) if index
   end
 end

@@ -133,6 +133,8 @@ module Riak
       obj = bucket.get_or_new(key)
       return if obj.nil?
 
+      counter = Riak::CRDT::TPNCounter.new(self.counter_options)
+
       if obj.siblings.length > 1
         obj.siblings.each do | sibling |
           unless sibling.raw_data.nil? or sibling.raw_data.empty?
