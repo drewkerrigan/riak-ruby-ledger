@@ -339,7 +339,7 @@ client = Riak::Client.new pb_port: 8087
 bucket = "ledgers"
 
 options = {:history_length => 3}
-key = "player_2"
+key = "player_4"
 ledger = Riak::Ledger.new(client[bucket], key, options)
 
 ledger.credit!("txn1", 10)

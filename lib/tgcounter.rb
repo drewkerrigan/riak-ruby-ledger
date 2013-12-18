@@ -89,15 +89,16 @@ module Riak::CRDT
         counts[actor]["txns"].delete(txn)
       end
 
-      # Merge this actor's data based on history_length
       total = 0
-      if counts[actor]["txns"].length >= history_length
+
+      # Merge this actor's data based on history_length
+      if counts[actor]["txns"].length > history_length
         (counts[actor]["txns"].length - history_length).times do
           txn = counts[actor]["txns"].shift
           total += txn[1]
         end
       end
-      counts[actor]["total"] = total
+      counts[actor]["total"] += total
     end
   end
 end
