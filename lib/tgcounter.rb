@@ -17,6 +17,7 @@ module Riak::CRDT
       self.counts[self.actor] = Hash.new()
       self.counts[self.actor]["total"] = 0
       self.counts[self.actor]["txns"] = Hash.new()
+      self.counts[self.actor]["time"] = Hash.new()
     end
 
     def to_json
@@ -36,6 +37,7 @@ module Riak::CRDT
     end
 
     def increment(transaction, value)
+      counts[actor]["time"][Time.now().to_f] = transaction
       counts[actor]["txns"][transaction] = value
     end
 
@@ -67,6 +69,8 @@ module Riak::CRDT
       total
     end
 
+    #scrap times or something, it's hard to deal with how to keep the correct timings...
+
     def merge(other)
       # Combine all actors first
       other.counts.each do |other_actor, other_values|
@@ -87,15 +91,21 @@ module Riak::CRDT
       # Remove duplicate transactions if other actors have claimed them
       unique_transactions(actor).keys.each do |txn|
         counts[actor]["txns"].delete(txn)
+        counts[actor]["time"].delete(txn)
       end
 
-      total = 0
-
       # Merge this actor's data based on history_length
+      total = 0
       if counts[actor]["txns"].length > history_length
-        (counts[actor]["txns"].length - history_length).times do
-          txn = counts[actor]["txns"].shift
-          total += txn[1]
+        to_delete = counts[actor]["txns"].length - history_length
+
+        times = counts[actor]["time"].clone
+
+        times.keys.sort[0..to_delete].each do |k|
+          txnid = counts[actor]["time"][k]
+          counts[actor]["time"].delete(k)
+          total += counts[actor]["txns"][txnid]
+          counts[actor]["txns"].delete(txnid)
         end
       end
       counts[actor]["total"] += total
