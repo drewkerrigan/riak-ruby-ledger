@@ -8,9 +8,9 @@ Gem::Specification.new do |spec|
   spec.version       = Riak::Ledger::VERSION
   spec.authors       = ["drewkerrigan"]
   spec.email         = ["dkerrigan@basho.com"]
-  spec.description   = %q{Write a gem description}
-  spec.summary       = %q{Write a gem summary}
-  spec.homepage      = ""
+  spec.description   = %q{A PNCounter CRDT with ledger with support for transaction ids and tunable write idempotence}
+  spec.summary       = %q{This gem attempts to provide a happy medium between the two extremes that are currently available for calculating a running counter or ledger. By allowing clients to set how many transactions to keep in the counter object as well as set a retry policy on the Riak actions performed on the counter, a good balance can be achieved.}
+  spec.homepage      = "https://github.com/drewkerrigan/riak-ruby-ledger"
   spec.license       = "Apache2"
 
   spec.files         = `git ls-files`.split($/)
@@ -20,5 +20,6 @@ Gem::Specification.new do |spec|
 
   spec.add_development_dependency "bundler", "~> 1.3"
   spec.add_development_dependency "rake"
-  spec.add_development_dependency "json"
+  spec.add_dependency "json"
+  spec.add_dependency "riak-client"
 end
