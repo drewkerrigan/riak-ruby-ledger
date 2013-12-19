@@ -57,13 +57,12 @@ Or install it yourself as:
 
     $ gem install riak-ruby-ledger
 
-
 ## Usage
 
 ### Initialize
 
 ```
-require 'riak' # riak-ruby-client gem
+require 'riak' # riak-client gem
 require 'ledger' # riak-ruby-ledger gem
 
 # Name your thread
