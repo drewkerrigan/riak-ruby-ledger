@@ -56,10 +56,16 @@ module Riak::CRDT
       from_hash(h, options)
     end
 
+    # Increment this actor's transaction array, overwriting if the value exists
+    # @param [String] transaction
+    # @param [Integer] value
     def increment(transaction, value)
       self.counts[actor]["txns"][transaction] = value
     end
 
+    # Get unique list of all transactions and values across all known actors
+    # @param [String] ignore_actor
+    # @return [Hash]
     def unique_transactions(ignore_actor=nil)
       txns = Hash.new()
 
@@ -78,6 +84,8 @@ module Riak::CRDT
       self.unique_transactions().keys.member?(transaction)
     end
 
+    # Sum of totals and currently tracked transactions
+    # @return [Integer]
     def value()
       total = self.unique_transactions().values.inject(0, &:+)
 
@@ -88,8 +96,9 @@ module Riak::CRDT
       total
     end
 
-    #scrap times or something, it's hard to deal with how to keep the correct timings...
-
+    # Merge actor data from a sibling into self, additionally compress oldest
+    # transactions that exceed the :history_length param into actor's total
+    # @param [TGCounter] other
     def merge(other)
       # Combine all actors first
       other.counts.each do |other_actor, other_values|
@@ -110,7 +119,6 @@ module Riak::CRDT
         end
       end
 
-
       # Remove duplicate transactions if other actors have claimed them
       self.unique_transactions(actor).keys.each do |txn|
         self.counts[actor]["txns"].delete(txn)
@@ -130,8 +138,8 @@ module Riak::CRDT
   end
 end
 
+# Ease of use class: Wraps an ordered array with some hash-like functions
 class TransactionArray
-
   attr_accessor :arr
 
   def initialize(arr=Array.new())

@@ -64,7 +64,7 @@ Or install it yourself as:
 
 ```
 require 'riak'
-require 'riak-ruby-ledger'
+require 'ledger'
 
 # Name your thread
 Thread.current["name"] = "ACTOR1"
@@ -99,7 +99,7 @@ ledger.value # 40
 ### Finding an exisitng Ledger
 
 ```
-ledger = Riak::Ledger.new(client["ledgers"], "player_1", options)
+ledger = Riak::Ledger.find!(client["ledgers"], "player_1", options)
 ledger.value # 40
 ```
 
@@ -131,6 +131,12 @@ ledger.value #60
 
 ledger.has_transaction? "txn1" #false
 ledger.has_transaction? "txn2" #false
+ledger.has_transaction? "txn3" #true
+
+# txn3 is still in the history because the most previous write does not trigger a merge of the actor's total
+# Performing a find! will trigger the merge however
+ledger = Riak::Ledger.find!(client["ledgers"], "player_2", options)
+
 ledger.has_transaction? "txn3" #false
 ledger.has_transaction? "txn4" #true
 ledger.has_transaction? "txn5" #true
@@ -142,7 +148,6 @@ ledger.has_transaction? "txn6" #true
 ```
 ledger.delete()
 ```
-
 
 ## Problem Statement
 

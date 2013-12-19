@@ -1,5 +1,5 @@
 require 'ledger/version'
-require 'tpncounter'
+require 'crdt/tpncounter'
 require 'json'
 
 module Riak

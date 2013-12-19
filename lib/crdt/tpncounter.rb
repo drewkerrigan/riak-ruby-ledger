@@ -1,4 +1,4 @@
-require 'tgcounter'
+require 'crdt/tgcounter'
 
 module Riak::CRDT
   class TPNCounter
@@ -34,10 +34,16 @@ module Riak::CRDT
       return pnc
     end
 
+    # Increment this actor's positive transaction array, overwriting if the value exists
+    # @param [String] transaction
+    # @param [Integer] value
     def increment(transaction, value)
       self.p.increment(transaction, value)
     end
 
+    # Increment this actor's negative transaction array, overwriting if the value exists
+    # @param [String] transaction
+    # @param [Integer] value
     def decrement(transaction, value)
       self.n.increment(transaction, value)
     end

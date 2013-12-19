@@ -10,7 +10,7 @@ Gem::Specification.new do |spec|
   spec.email         = ["dkerrigan@basho.com"]
   spec.description   = %q{Write a gem description}
   spec.summary       = %q{Write a gem summary}
-  spec.homepage      = ""
+  spec.homepage      = "https://github.com/drewkerrigan/riak-ruby-ledger"
   spec.license       = "Apache2"
 
   spec.files         = `git ls-files`.split($/)
