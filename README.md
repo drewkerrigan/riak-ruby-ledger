@@ -47,7 +47,7 @@ Other Riak Data Types: [github.com/basho/riak_dt](https://github.com/basho/riak_
 
 Add this line to your application's Gemfile:
 
-    gem 'riak-ruby-ledger', '~> 0.0.2'
+    gem 'riak-ruby-ledger'
 
 And then execute:
 
