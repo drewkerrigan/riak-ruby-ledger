@@ -6,7 +6,7 @@ A PNCounter CRDT with ledger transaction ids for tunable write idempotence
 
 ### What does it do?
 
-This gem attempts to provide a happy medium between the two extremes that are currently available for calculating a running counter or ledger.
+This gem attempts to provide a tunable Counter option by combining non-idempotent GCounters and a partially idempotent GSet for calculating a running counter or ledger.
 
 #### Zero Transaction History
 CRDT PNCounters (two GCounters) such as Riak Counters are non-idempotent, and store nothing about a counter transaction other than the final value. As such it doesn't make sense to use them to store any counter that needs to be accurate.
