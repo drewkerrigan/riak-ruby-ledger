@@ -18,8 +18,8 @@ module Riak::CRDT
     def to_json
       {
           type: 'TPNCounter',
-          p: p.to_hash,
-          n: n.to_hash
+          p: self.p.to_hash,
+          n: self.n.to_hash
       }.to_json
     end
 
@@ -35,24 +35,24 @@ module Riak::CRDT
     end
 
     def increment(transaction, value)
-      p.increment(transaction, value)
+      self.p.increment(transaction, value)
     end
 
     def decrement(transaction, value)
-      n.increment(transaction, value)
+      self.n.increment(transaction, value)
     end
 
     def value
-      p.value - n.value
+      self.p.value - self.n.value
     end
 
     def has_transaction?(transaction)
-      p.has_transaction?(transaction) || n.has_transaction?(transaction)
+      self.p.has_transaction?(transaction) || self.n.has_transaction?(transaction)
     end
 
     def merge(other)
-      p.merge(other.p)
-      n.merge(other.n)
+      self.p.merge(other.p)
+      self.n.merge(other.n)
     end
   end
 end

@@ -21,7 +21,7 @@ module Riak::CRDT
 
     def to_hash
       c = Hash.new()
-      counts.each do |a, values|
+      self.counts.each do |a, values|
         c[a] = Hash.new()
         c[a]["total"] = values["total"]
         c[a]["txns"] = values["txns"].arr
@@ -34,7 +34,7 @@ module Riak::CRDT
     end
 
     def to_json
-      to_hash.to_json
+      self.to_hash.to_json
     end
 
     def self.from_hash(h, options)
@@ -57,13 +57,13 @@ module Riak::CRDT
     end
 
     def increment(transaction, value)
-      counts[actor]["txns"][transaction] = value
+      self.counts[actor]["txns"][transaction] = value
     end
 
     def unique_transactions(ignore_actor=nil)
       txns = Hash.new()
 
-      counts.each do |a, values|
+      self.counts.each do |a, values|
         unless a == ignore_actor
           values["txns"].arr.each do |arr|
               txns[arr[0]] = arr[1]
@@ -75,13 +75,13 @@ module Riak::CRDT
     end
 
     def has_transaction?(transaction)
-      unique_transactions().keys.member?(transaction)
+      self.unique_transactions().keys.member?(transaction)
     end
 
     def value()
-      total = unique_transactions().values.inject(0, &:+)
+      total = self.unique_transactions().values.inject(0, &:+)
 
-      counts.values.each do |a|
+      self.counts.values.each do |a|
         total += a["total"]
       end
 
@@ -93,35 +93,39 @@ module Riak::CRDT
     def merge(other)
       # Combine all actors first
       other.counts.each do |other_actor, other_values|
-        if counts[other_actor]
+        if self.counts[other_actor]
           # Max of totals
-          counts[other_actor]["total"] = [counts[other_actor]["total"], other_values["total"]].max
+          mine = self.counts[other_actor]["total"]
+          self.counts[other_actor]["total"] = [mine, other_values["total"]].max
 
           # Max of unique transactions
           other_values["txns"].arr.each do |arr|
             other_txn, other_value = arr
-            mine = (counts[other_actor]["txns"][other_txn]) ? counts[other_actor]["txns"][other_txn] : 0
-            counts[other_actor]["txns"][other_txn] = [mine, other_value].max
+            mine = (self.counts[other_actor]["txns"][other_txn]) ?
+                self.counts[other_actor]["txns"][other_txn] : 0
+            self.counts[other_actor]["txns"][other_txn] = [mine, other_value].max
           end
         else
-          counts[other_actor] = other_values
+          self.counts[other_actor] = other_values
         end
       end
 
+
       # Remove duplicate transactions if other actors have claimed them
-      unique_transactions(actor).keys.each do |txn|
-        counts[actor]["txns"].delete(txn)
+      self.unique_transactions(actor).keys.each do |txn|
+        self.counts[actor]["txns"].delete(txn)
       end
 
       # Merge this actor's data based on history_length
       total = 0
-      if counts[actor]["txns"].length > history_length
-        to_delete = counts[actor]["txns"].length - history_length
-        counts[actor]["txns"].arr.slice!(0..to_delete - 1).each do |arr|
+      if self.counts[actor]["txns"].length > self.history_length
+        to_delete = self.counts[actor]["txns"].length - self.history_length
+        self.counts[actor]["txns"].arr.slice!(0..to_delete - 1).each do |arr|
           total += arr[1]
         end
       end
-      counts[actor]["total"] += total
+
+      self.counts[actor]["total"] += total
     end
   end
 end

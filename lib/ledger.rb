@@ -26,7 +26,7 @@ module Riak
       self.counter = Riak::CRDT::TPNCounter.new(self.counter_options)
 
       unless bucket.allow_mult
-        bucket.allow_mult = true
+        self.bucket.allow_mult = true
       end
     end
 
@@ -87,14 +87,14 @@ module Riak
       else
         # If the transaction doesn't exist, attempt to add it and save
         if value < 0
-          counter.decrement(transaction, value * -1)
+          self.counter.decrement(transaction, value * -1)
         else
-          counter.increment(transaction, value)
+          self.counter.increment(transaction, value)
         end
 
         unless save(vclock)
           # If the save wasn't successful, retry
-          current_retry = retry_count unless current_retry
+          current_retry = self.retry_count unless current_retry
           update!(transaction, value, current_retry - 1)
         else
           # If the save succeeded, no problem
@@ -107,20 +107,20 @@ module Riak
     # @param [String] transaction
     # @return [Boolean]
     def has_transaction?(transaction)
-      counter.has_transaction?(transaction)
+      self.counter.has_transaction?(transaction)
     end
 
     # Calculate the current value of the counter
     # @return [Integer]
     def value()
-      counter.value
+      self.counter.value
     end
 
     # Delete the counter
     # @return [Boolean]
     def delete()
       begin
-        bucket.delete(key)
+        self.bucket.delete(self.key)
         return true
       rescue => e
         return false
@@ -130,19 +130,19 @@ module Riak
     # Get the current state of the counter and merge it
     # @return [String]
     def refresh()
-      obj = bucket.get_or_new(key)
+      obj = self.bucket.get_or_new(self.key)
       return if obj.nil?
 
-      counter = Riak::CRDT::TPNCounter.new(self.counter_options)
+      self.counter = Riak::CRDT::TPNCounter.new(self.counter_options)
 
       if obj.siblings.length > 1
         obj.siblings.each do | sibling |
           unless sibling.raw_data.nil? or sibling.raw_data.empty?
-            counter.merge(Riak::CRDT::TPNCounter.from_json(sibling.raw_data, self.counter_options))
+            self.counter.merge(Riak::CRDT::TPNCounter.from_json(sibling.raw_data, self.counter_options))
           end
         end
       elsif !obj.raw_data.nil?
-        counter.merge(Riak::CRDT::TPNCounter.from_json(obj.raw_data, self.counter_options))
+        self.counter.merge(Riak::CRDT::TPNCounter.from_json(obj.raw_data, self.counter_options))
       end
 
       return obj.vclock
@@ -152,7 +152,7 @@ module Riak
     # @param [String] vclock
     # @return [Boolean]
     def save(vclock=nil)
-      object = bucket.new(key)
+      object = self.bucket.new(self.key)
       object.vclock = vclock if vclock
       object.content_type = 'application/json'
       object.raw_data = to_json
@@ -167,7 +167,7 @@ module Riak
     end
 
     def to_json()
-      counter.to_json
+      self.counter.to_json
     end
   end
 end

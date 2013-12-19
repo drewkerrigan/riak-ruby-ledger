@@ -1,6 +1,148 @@
 # Riak-Ruby-Ledger
 
-A PNCounter CRDT with ledger transaction ids for write idempotence
+A PNCounter CRDT with ledger transaction ids for tunable write idempotence
+
+## Summary of Functionality
+
+### What does it do?
+
+This gem attempts to provid a happy medium between the two extremes that are currently available for calculating a running counter or ledger.
+
+#### Zero Transaction History
+CRDT PNCounters (two GCounters) such as Riak Counters are non-idempotent, and store nothing about a counter transaction other than the final value. As such it doesn't make sense to use them to store any counter that needs to be accurate.
+
+#### Entire Transaction History
+Another approach would be to use a CRDT GSet to store the entire set of transactions, and calculate the current value from the unique list of transaction ids. While accurate, this isn't feasible for many use cases do the space it consumes.
+
+#### Tunable Transaction History
+By allowing clients to set how many transactions to keep in the counter object as well as set a retry policy on the Riak actions performed on the counter, a good balance can be achieved. The `Riak::Ledger` class in this gem can be instantiated with the following options:
+
+```
+:actor => Actor ID, one per thread or serialized writer
+:history_length => Number of transactions to store per actor per type (credit or debit)
+:retry_count => Number of times to retry Riak requests if they fail
+```
+
+Furthermore, each `#credit!` and `#debit!` action against the ledger takes an (assumed) globally unique `transaction` id that is determined by your application.
+
+These options combined give you reasonable guarentees that a single transaction can be retried per counter continually as long as less than X number of other transactions are applied to the same counter (where X is the `:history_length`).
+
+The gem will automatically retry `:retry_count` number of times, and if it still fails after that you can define a secondary retry or reconciliation policy within your application to deal with the failure, although if the actions are continually failing, it is possible that something is systematically wrong with your Riak cluster.
+
+### What doesn't it do?
+
+This gem cannot guarentee transaction idempotence over the entire lifetime of a counter for greater than `:history_length` number of transactions. If your application requires this level of idempotence on a counter, a slower reading GSet based implementation may be right for you, but keep in mind this will penalize the most active users of the counter.
+
+### Further Reading
+
+In order to attempt to best meet the requirements of *most* counters that cannot be satisfied with Riak Counters, this gem implements approach ***2b*** described in the [Problem Statement](https://github.com/drewkerrigan/riak-ruby-ledger/tree/ack-refactor#problem-statement) below as it should handle the most likely retry scenarios for most applications.
+
+CRDT paper from Shapiro et al. at INRIA [http://hal.upmc.fr/docs/00/55/55/88/PDF/techreport.pdf](http://hal.upmc.fr/docs/00/55/55/88/PDF/techreport.pdf)
+
+Riak Counters: [http://basho.com/counters-in-riak-1-4/](http://basho.com/counters-in-riak-1-4/)
+
+Other Riak Data Types: [github.com/basho/riak_dt](https://github.com/basho/riak_dt)
+
+## Installation
+
+Add this line to your application's Gemfile:
+
+    gem 'riak-ruby-ledger'
+
+And then execute:
+
+    $ bundle
+
+Or install it yourself as:
+
+    $ gem install riak-ruby-ledger
+
+
+## Usage
+
+### Initialize
+
+```
+require 'riak'
+require 'riak-ruby-ledger'
+
+# Name your thread
+Thread.current["name"] = "ACTOR1"
+
+# Create a Riak::Client instance
+client = Riak::Client.new pb_port: 8087
+
+# Default option values
+options = {
+	:actor => Thread.current["name"], # Actor ID, one per thread or serialized writer
+	:history_length => 10, # Number of transactions to store per actor per type (credit or debit)
+	:retry_count => 10 # Number of times to retry Riak requests if they fail
+}
+
+# Create the ledger object
+#                         Riak::Bucket        Key        Hash
+ledger = Riak::Ledger.new(client["ledgers"], "player_1", options)
+```
+
+### Credit and debit
+
+```
+ledger.credit!("transaction1", 50)
+ledger.value # 50
+ledger.debit!("transaction2", 10)
+ledger.value # 40
+
+ledger.debit!("transaction2", 10)
+ledger.value # 40
+```
+
+### Finding an exisitng Ledger
+
+```
+ledger = Riak::Ledger.new(client["ledgers"], "player_1", options)
+ledger.value # 40
+```
+
+### Request success
+
+If a call to `#debit!` or `#credit!` does not return false, then the transaction can be considered saved, because it would have retried otherwise. Still, for debugging, testing, or external failure policies, `#has_transaction?` is also exposed
+
+```
+ledger.has_transaction? "transaction2" # true
+ledger.has_transaction? "transaction1" # true
+```
+
+### Merging after history_length is reached
+
+For this example, the `:history_length` is lowered to 3 so it gets reached faster.
+
+```
+options = {:history_length => 3}
+ledger = Riak::Ledger.new(client["ledgers"], "player_2", options)
+
+ledger.credit!("txn1", 10)
+ledger.credit!("txn2", 10)
+ledger.credit!("txn3", 10)
+ledger.credit!("txn4", 10)
+ledger.credit!("txn5", 10)
+ledger.credit!("txn6", 10)
+
+ledger.value #60
+
+ledger.has_transaction? "txn1" #false
+ledger.has_transaction? "txn2" #false
+ledger.has_transaction? "txn3" #false
+ledger.has_transaction? "txn4" #true
+ledger.has_transaction? "txn5" #true
+ledger.has_transaction? "txn6" #true
+```
+
+### Deleting a ledger
+
+```
+ledger.delete()
+```
+
 
 ## Problem Statement
 
@@ -46,12 +188,12 @@ In the case of 2b and 2c, we have the following choices:
 
 ## Idempotent Counters
 
-There are several approaches to making counters idempotent, the ones relative to this gem are described here.
+There are several approaches to making counters varying degrees of idempotent, the ones relative to the goals of this gem described here.
 
 ### Definitions
 
-* ***Transaction id***: Globally unique externally generated transaction id is available per counter action (increment or decrement)
-* ***Actor***: A thread, process, or server that is able to serially perform actions (a single actor id can never perform actions in parallel with itself)
+* ***Transaction id***: Globally unique externally generated transaction id that is available per counter action (increment or decrement)
+* ***Actor***: A thread, process, or server that is able to serially perform actions (a single actor can never perform actions in parallel with itself)
 * ***Sibling***: In Riak, when you write to the same key without specifying a vector clock, a sibling is created. This is denoted below as `[...sibling1..., ...sibling2...]`.
 
 ### Approach 1: Ensure idempotent counter actions at any time, by any actor
@@ -151,10 +293,10 @@ Total: 160
 
 This approach is the same as 2a, but instead of only storing the most previous transaction, we store the most previous `X` transactions. In this example we'll use X=5
 
-Actor 1 writes txn1: 50, txn2: 10, txn3: 100 (order is preserved in set)
+Actor 1 writes txn1: 50, txn2: 10, txn3: 100 (order is preserved using an array instead of a hash for transactions)
 
 ```
-Actor1: {"total": 0} {"txn1": 50, "txn2": 10, "txn3": 100}
+Actor1: {"total": 0} [["txn1", 50], ["txn2", 10], ["txn3", 100]]}
 ```
 
 Actor 2 attempts to write txn1: 50
@@ -164,35 +306,35 @@ Actor 2 reads current value and sees that txn1 has already been written, ignores
 Actor 2 writes merged value
 
 ```
-Actor1: {"total": 0} {"txn1": 50, "txn2": 10, "txn3": 100}
+Actor1: {"total": 0} [["txn1", 50], ["txn2", 10], ["txn3", 100]]
 ```
 
 Actor 2 Writes txn4: 100
 
 ```
-Actor1: {"total": 0} {"txn1": 50, "txn2": 10, "txn3": 100}
-Actor2: {"total": 0} {"txn4": 100}
+Actor1: {"total": 0} [["txn1", 50], ["txn2", 10], ["txn3", 100]]
+Actor2: {"total": 0} [["txn4", 100]]
 ```
 
 Actor 1 Writes txn5: 20, txn6: 20
 
 ```
-Actor1: {"total": 0} {"txn1": 50, "txn2": 10, "txn3": 100, "txn5": 20, "txn6": 20}
-Actor2: {"total": 0} {"txn4": 100}
+Actor1: {"total": 0} [["txn1", 50], ["txn2", 10], ["txn3", 100], ["txn5", 20], ["txn6", 20]]
+Actor2: {"total": 0} [["txn4", 100]]
 ```
 
 Actor 1 Writes txn7: 30, and writes it's own merged data
 
 ```
-Actor1: {"total": 50} {"txn2": 10, "txn3": 100, "txn5": 20, "txn6": 20, "txn7": 30}
-Actor2: {"total": 0} {"txn4": 100}
+Actor1: {"total": 50} [["txn2", 10], ["txn3", 100], ["txn5", 20], ["txn6", 20], ["txn7", 30]]
+Actor2: {"total": 0} [["txn4", 100]]
 ```
 
 Actor 1 reads and merges value
 
 ```
-Actor1: {"total": 50} {"txn2": 10, "txn3": 100, "txn5": 20, "txn6": 20, "txn7": 30}
-Actor2: {"total": 0} {"txn4": 100}
+Actor1: {"total": 50} [["txn2", 10], ["txn3", 100], ["txn5", 20], ["txn6", 20], ["txn7", 30]]
+Actor2: {"total": 0} [["txn4", 100]]
 ```
 
 Total: 330
@@ -263,101 +405,6 @@ Total: 260
 ## Conclusion
 
 In order to attempt to best meet the requirements of *most* counters that cannot be satisfied with Riak Counters, this gem implements approach ***2b*** as it should handle the most likely retry scenarios for most applications.
-
-
-## Installation
-
-Add this line to your application's Gemfile:
-
-    gem 'riak-ruby-ledger'
-
-And then execute:
-
-    $ bundle
-
-Or install it yourself as:
-
-    $ gem install riak-ruby-ledger
-
-
-## Usage
-
-### Initialize
-
-```
-require 'riak'
-require 'riak-ruby-ledger'
-
-# Create a client interface
-client = Riak::Client.new pb_port: 8087
-bucket = "ledgers"
-key = "player_1"
-Thread.current["name"] = "ACTOR1"
-
-
-#Defaults:
-#options = {:actor => Thread.current["name"], :history_length => 10, :retry_count => 10}
-options = {}
-
-ledger = Riak::Ledger.new(client[bucket], key, options)
-```
-
-### Credit and debit
-
-```
-ledger.credit!("transaction1", 50)
-ledger.debit!("transaction2", 10)
-ledger.value # 40
-
-ledger.debit!("transaction2", 10)
-ledger.value # still 40
-
-Thread.current["name"] = "ACTOR2"
-
-ledger = Riak::Ledger.find!(client[bucket], key)
-ledger.debit!("transaction2", 10)
-ledger.value # still 40
-
-ledger.debit!("transaction3", 10)
-ledger.value #now 30
-
-Thread.current["name"] = "ACTOR1"
-ledger = Riak::Ledger.find!(client[bucket], key)
-ledger.value #still 40
-ledger.debit!("transaction3", 10)
-ledger.value #now 30
-ledger.has_transaction? "transaction2" #true
-ledger.has_transaction? "transaction1" #true
-```
-
-### Merging after history_length is reached
-
-```
-require 'riak'
-require 'ledger'
-client = Riak::Client.new pb_port: 8087
-bucket = "ledgers"
-
-options = {:history_length => 3}
-key = "player_6"
-ledger = Riak::Ledger.new(client[bucket], key, options)
-
-ledger.credit!("txn1", 10)
-ledger.credit!("txn2", 10)
-ledger.credit!("txn3", 10)
-ledger.credit!("txn4", 10)
-ledger.credit!("txn5", 10)
-ledger.credit!("txn6", 10)
-
-ledger.value #60
-
-ledger.has_transaction? "txn1" #false
-ledger.has_transaction? "txn2" #false
-ledger.has_transaction? "txn3" #true
-ledger.has_transaction? "txn4" #true
-ledger.has_transaction? "txn5" #true
-ledger.has_transaction? "txn6" #true
-```
 
 ## Contributing
 
