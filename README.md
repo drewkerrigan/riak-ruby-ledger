@@ -6,7 +6,7 @@ A PNCounter CRDT with ledger transaction ids for tunable write idempotence
 
 ### What does it do?
 
-This gem attempts to provid a happy medium between the two extremes that are currently available for calculating a running counter or ledger.
+This gem attempts to provide a happy medium between the two extremes that are currently available for calculating a running counter or ledger.
 
 #### Zero Transaction History
 CRDT PNCounters (two GCounters) such as Riak Counters are non-idempotent, and store nothing about a counter transaction other than the final value. As such it doesn't make sense to use them to store any counter that needs to be accurate.
@@ -63,8 +63,8 @@ Or install it yourself as:
 ### Initialize
 
 ```
-require 'riak'
-require 'ledger'
+require 'riak' # riak-ruby-client gem
+require 'ledger' # riak-ruby-ledger gem
 
 # Name your thread
 Thread.current["name"] = "ACTOR1"
