@@ -1,6 +1,6 @@
 # Riak-Ruby-Ledger
 
-A PNCounter CRDT with ledger transaction ids for tunable write idempotence
+A PNCounter CRDT with ledger transaction ids for tunable retry policies
 
 ## Summary of Functionality
 
@@ -12,7 +12,7 @@ This gem attempts to provide a tunable Counter option by combining non-idempoten
 CRDT PNCounters (two GCounters) such as Riak Counters are non-idempotent, and store nothing about a counter transaction other than the final value. As such it doesn't make sense to use them to store any counter that needs to be accurate.
 
 #### Entire Transaction History
-Another approach would be to use a CRDT GSet to store the entire set of transactions, and calculate the current value from the unique list of transaction ids. While accurate, this isn't feasible for many use cases do the space it consumes.
+Another approach would be to use a CRDT GSet to store the entire set of transactions, and calculate the current value from the unique list of transaction ids. While accurate, this isn't feasible for many use cases due to the space it consumes.
 
 #### Tunable Transaction History
 By allowing clients to set how many transactions to keep in the counter object as well as set a retry policy on the Riak actions performed on the counter, a good balance can be achieved. The `Riak::Ledger` class in this gem can be instantiated with the following options:
