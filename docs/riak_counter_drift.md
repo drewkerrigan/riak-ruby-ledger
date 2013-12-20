@@ -1,26 +1,21 @@
 ## Riak Counters and Drift
 
+### Summary
 
+**Why shouldn't I use Riak Counters?**
 
+CRDT PNCounters (two plain GCounters) such as Riak Counters are non-idempotent and store nothing about a counter transaction other than the final value. This means that if an increment operation fails in any number of ways (500 response from server, process that made the call dies, network connection is interrupted, operation times out, etc), your application now has no idea whether or not the increment actually happened.
 
+**What is Counter Drift?**
 
+In the above situation of a failed increment operation, your application has two choices:
 
+1. Retry the operation
+	a. This could result in the operation occuring twice causing what is called **positive counter drift**
+2. Don't retry the operation
+	b. This could result in the operation never occuring at all causing **negative counter drift**
 
-
-
-#### Zero Transaction History
-CRDT PNCounters (two GCounters) such as Riak Counters are non-idempotent, and store nothing about a counter transaction other than the final value. As such it doesn't make sense to use them to store any counter that needs to be accurate.
-
-#### Entire Transaction History
-Another approach would be to use a CRDT GSet to store the entire set of transactions, and calculate the current value from the unique list of transaction ids. While accurate, this isn't feasible for many use cases due to the space it consumes.
-
-
-
-
-
-
-
-
+As such it doesn't make sense to use plain GCounters or PNCounters to store any counter that needs to be accurate.
 
 ### When to use Riak Counters
 
