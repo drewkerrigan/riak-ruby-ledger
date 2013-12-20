@@ -69,9 +69,8 @@ module Riak::CRDT
 
       self.counts.each do |a, values|
         next unless a == for_actor
-          values["txns"].arr.each do |arr|
-            txns[arr[0]] = arr[1]
-          end
+        values["txns"].arr.each do |arr|
+          txns[arr[0]] = arr[1]
         end
       end
 
