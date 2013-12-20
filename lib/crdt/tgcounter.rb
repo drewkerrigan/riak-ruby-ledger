@@ -1,5 +1,3 @@
-require 'set'
-
 module Riak::CRDT
   class TGCounter
     attr_accessor :counts, :actor, :history_length
@@ -63,21 +61,51 @@ module Riak::CRDT
       self.counts[actor]["txns"][transaction] = value
     end
 
-    # Get unique list of all transactions and values across all known actors
-    # @param [String] ignore_actor
+    # Get unique list of all transactions and values across all known actors, or optionally for a single actor
+    # @param [String] for_actor
     # @return [Hash]
-    def unique_transactions(ignore_actor=nil)
+    def unique_transactions(for_actor=nil)
       txns = Hash.new()
 
       self.counts.each do |a, values|
-        unless a == ignore_actor
+        next unless a == for_actor
           values["txns"].arr.each do |arr|
-              txns[arr[0]] = arr[1]
+            txns[arr[0]] = arr[1]
           end
         end
       end
 
       txns
+    end
+
+    # Get unique list of all duplicate transactions per actor other than self
+    # @return [Hash]
+    def duplicate_transactions_by_actor()
+      actor_txns = Hash.new()
+
+      my_transactions = self.unique_transactions(self.actor).keys
+
+      self.counts.keys.each do |a|
+        next if a == self.actor
+        uniques = self.unique_transactions(a).keys
+        actor_txns[a] = (my_transactions & uniques)
+      end
+
+      actor_txns
+    end
+
+    # Get unique list of all duplicate transactions for all actors other than self
+    # @return [Hash]
+    def duplicate_transactions()
+      duplicates = Hash.new()
+
+      self.duplicate_transactions_by_actor().each do |a, txns|
+        txns.each do |txn, val|
+          duplicates[txn] = val
+        end
+      end
+
+      duplicates
     end
 
     def has_transaction?(transaction)
@@ -96,11 +124,18 @@ module Riak::CRDT
       total
     end
 
-    # Merge actor data from a sibling into self, additionally compress oldest
-    # transactions that exceed the :history_length param into actor's total
+    # Merge actor data from a sibling into self, additionally remove duplicate
+    # transactions and compress oldest transactions that exceed the
+    # :history_length param into actor's total
     # @param [TGCounter] other
     def merge(other)
-      # Combine all actors first
+      self.merge_actors(other)
+      self.remove_duplicates()
+      self.compress_history()
+    end
+
+    # Combine all actors' data
+    def merge_actors(other)
       other.counts.each do |other_actor, other_values|
         if self.counts[other_actor]
           # Max of totals
@@ -118,18 +153,31 @@ module Riak::CRDT
           self.counts[other_actor] = other_values
         end
       end
+    end
 
-      # Remove duplicate transactions if other actors have claimed them
-      self.unique_transactions(actor).keys.each do |txn|
-        self.counts[actor]["txns"].delete(txn)
+    # Remove duplicate transactions if other actors have claimed them
+    def remove_duplicates()
+      self.duplicate_transactions_by_actor().each do |a, txns|
+        # Spaceship operator, if my actor is of greater value than theirs, skip because they should remove the dupe
+        next if (self.actor <=> a) == -1
+
+        txns.each do |txn|
+          self.counts[self.actor]["txns"].delete(txn)
+        end
       end
+    end
 
-      # Merge this actor's data based on history_length
+    # Compress this actor's data based on history_length
+    def compress_history()
       total = 0
+
+      duplicates = self.duplicate_transactions()
+
       if self.counts[actor]["txns"].length > self.history_length
         to_delete = self.counts[actor]["txns"].length - self.history_length
         self.counts[actor]["txns"].arr.slice!(0..to_delete - 1).each do |arr|
-          total += arr[1]
+          txn, val = arr
+          total += val unless duplicates.member? txn
         end
       end
 
@@ -138,7 +186,7 @@ module Riak::CRDT
   end
 end
 
-# Ease of use class: Wraps an ordered array with some hash-like functions
+# Ease of use class - Wraps an ordered array with some hash-like functions
 class TransactionArray
   attr_accessor :arr
 

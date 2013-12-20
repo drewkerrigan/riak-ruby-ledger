@@ -1,4 +1,4 @@
-require_relative '../test_helper'
+require_relative '../../test_helper'
 
 describe Riak::CRDT::TPNCounter do
   options1 = {:actor => "ACTOR1", :history_length => 5}

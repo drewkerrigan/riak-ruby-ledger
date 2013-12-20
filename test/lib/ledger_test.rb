@@ -104,39 +104,39 @@ describe Riak::Ledger do
     assert @ledger1.has_transaction? "txn10"
     assert @ledger1.has_transaction? "txn11"
   end
-  #
-  #it "must merge a two actors" do
-  #  @ledger1.debit!("txn1", 10)
-  #  @ledger1.credit!("txn2", 10)
-  #  @ledger1.credit!("txn3", 10)
-  #  @ledger1.credit!("txn4", 10)
-  #  @ledger1.credit!("txn5", 10)
-  #  @ledger2.debit!("txn6", 10)
-  #  @ledger2.credit!("txn7", 10)
-  #  @ledger2.credit!("txn8", 10)
-  #  @ledger2.credit!("txn9", 10)
-  #  @ledger2.credit!("txn10", 10)
-  #
-  #  @ledger1.credit!("txn11", 10)
-  #  @ledger1.credit!("txn11", 10)
-  #  @ledger2.credit!("txn11", 10)
-  #  @ledger2.credit!("txn11", 10)
-  #
-  #  assert_equal 110, @ledger1.value
-  #  #1st 6 transactions were merged into total
-  #  assert_equal 60, @ledger1.counter.p.counts["ACTOR1"]["total"]
-  #
-  #  refute @ledger1.has_transaction? "txn1"
-  #  refute @ledger1.has_transaction? "txn2"
-  #  refute @ledger1.has_transaction? "txn3"
-  #  refute @ledger1.has_transaction? "txn4"
-  #  refute @ledger1.has_transaction? "txn5"
-  #  refute @ledger1.has_transaction? "txn6"
-  #  assert @ledger1.has_transaction? "txn7"
-  #  assert @ledger1.has_transaction? "txn8"
-  #  assert @ledger1.has_transaction? "txn9"
-  #  assert @ledger1.has_transaction? "txn10"
-  #  assert @ledger1.has_transaction? "txn11"
-  #end
+
+  it "must merge a two actors" do
+    @ledger1.debit!("txn1", 10)
+    @ledger1.credit!("txn2", 10)
+    @ledger1.credit!("txn3", 10)
+    @ledger1.credit!("txn4", 10)
+    @ledger1.credit!("txn5", 10)
+    @ledger2.debit!("txn6", 10)
+    @ledger2.credit!("txn7", 10)
+    @ledger2.credit!("txn8", 10)
+    @ledger2.credit!("txn9", 10)
+    @ledger2.credit!("txn10", 10)
+
+    @ledger1.credit!("txn11", 10)
+    @ledger1.credit!("txn11", 10)
+    @ledger2.credit!("txn11", 10)
+    @ledger2.credit!("txn11", 10)
+
+    assert_equal 110, @ledger1.value
+    #1st 6 transactions were merged into total
+    assert_equal 60, @ledger1.counter.p.counts["ACTOR1"]["total"]
+
+    refute @ledger1.has_transaction? "txn1"
+    refute @ledger1.has_transaction? "txn2"
+    refute @ledger1.has_transaction? "txn3"
+    refute @ledger1.has_transaction? "txn4"
+    refute @ledger1.has_transaction? "txn5"
+    refute @ledger1.has_transaction? "txn6"
+    assert @ledger1.has_transaction? "txn7"
+    assert @ledger1.has_transaction? "txn8"
+    assert @ledger1.has_transaction? "txn9"
+    assert @ledger1.has_transaction? "txn10"
+    assert @ledger1.has_transaction? "txn11"
+  end
 
 end

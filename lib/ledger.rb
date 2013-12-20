@@ -54,7 +54,7 @@ module Riak
     # @see update!(transaction, value)
     # @return [Boolean]
     def credit!(transaction, value)
-      update!(transaction, value)
+      self.update!(transaction, value)
     end
 
     # Decrement the counter, merge and save it
@@ -63,7 +63,7 @@ module Riak
     # @see update!(transaction, value)
     # @return [Boolean]
     def debit!(transaction, value)
-      update!(transaction, value * -1)
+      self.update!(transaction, value * -1)
     end
 
     # Update the counter, merge and save it. Retry if unsuccessful
@@ -78,10 +78,10 @@ module Riak
       end
 
       # Get the current merged state of this counter
-      vclock = refresh()
+      vclock = self.refresh()
 
 
-      if has_transaction?(transaction)
+      if self.has_transaction?(transaction)
         # If the transaction already exists in the counter, no problem
         return true
       else
@@ -92,10 +92,10 @@ module Riak
           self.counter.increment(transaction, value)
         end
 
-        unless save(vclock)
+        unless self.save(vclock)
           # If the save wasn't successful, retry
           current_retry = self.retry_count unless current_retry
-          update!(transaction, value, current_retry - 1)
+          self.update!(transaction, value, current_retry - 1)
         else
           # If the save succeeded, no problem
           return true
@@ -103,7 +103,7 @@ module Riak
       end
     end
 
-    # Create a new Ledger object
+    # Check if the counter has transaction
     # @param [String] transaction
     # @return [Boolean]
     def has_transaction?(transaction)
@@ -155,7 +155,7 @@ module Riak
       object = self.bucket.new(self.key)
       object.vclock = vclock if vclock
       object.content_type = 'application/json'
-      object.raw_data = to_json
+      object.raw_data = self.to_json()
 
       begin
         options = {:returnbody => false}
