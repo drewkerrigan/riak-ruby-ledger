@@ -17,7 +17,7 @@ Function | Description
 Name | Description
 --- | ---
 `:retry_count`[Integer] | When a write to Riak is a "maybe" (500, timeout, or any other error condition), resubmit the request `:retry_count` number of times, and return false if it is still unsuccessful
-`:history_length`[Integer] | Keep up to `:history_length` number of transactions in each actor's section of the underlying GCounter. When the (`:history_length` + 1)th transaction is written, add the oldest transaction's value to the actor's total
+`:history_length`[Integer] | Keep up to `:history_length` number of transactions in each actor's section of the underlying GCounter. When the (`:history_length` + 1)th transaction is written then merged, add the oldest transaction's value to the actor's total
 
 ### GCounters
 
@@ -46,7 +46,7 @@ Because GCounters only allow for a counter to increment, a simple way to allow f
 
 "p" is for positive, and "n" is for negative, so the current value of a PNCounter is defined by P minus N.
 
-### TPNCounter and TGCounter (unique to this gem and it's functionality)
+### TPNCounter and TGCounter (unique to this gem and its functionality)
 
 For idempotent operations over a limited window of transactions, an array of transactions can be stored with each actor's counter value. The mechanics of the GCounter are unchanged, but the method with which the single total value for an actor gets incremented is dependent upon the current size of the transaction list.
 
@@ -103,9 +103,9 @@ Before every write, the Ledger class will read the current value of the counter 
 
 It is possible to have duplicate transactions in across multiple actors however if the following happens:
 
-1) Actor 1 attempts to write transaction1, but is taking a long time to do so for some reason
-2) Your application decides that Actor 1 has taken too long, and issues the same transaction to Actor 2 for writing
-3) Since Actor 1's version of the transaction is still in flight, it could finish successfully while Actor 2's write of transaction1 was also successful
+1. Actor 1 attempts to write transaction1, but is taking a long time to do so for some reason
+2. Your application decides that Actor 1 has taken too long, and issues the same transaction to Actor 2 for writing
+3. Since Actor 1's version of the transaction is still in flight, it could finish successfully while Actor 2's write of transaction1 was also successful
 
 This situation would result in siblings getting created where the merged result ends up being 2 actors with the same transaction1
 
@@ -113,9 +113,9 @@ This situation would result in siblings getting created where the merged result 
 
 Upon Actor 2's or Actor 1's next merge, they will find that there is indeed a duplicate, and the following logic happens in order to deal with the duplicate:
 
-1) A merge occurs, and a string comparison on the actors' ids takes place to see who should own the transaction
-    a) If Actor 1 is merging, "ACTOR1" is less than "ACTOR2", so Actor 1 gets rid of the transaction without counting it
-    b) If Actor 2 is merging, "ACTOR2" is greater than "ACTOR1", so Actor 2 keeps the transaction, knowing that Actor 1 should delete it
+1. A merge occurs, and a string comparison on the actors' ids takes place to see who should own the transaction
+    a. If Actor 1 is merging, "ACTOR1" is less than "ACTOR2", so Actor 1 gets rid of the transaction without counting it
+    b. If Actor 2 is merging, "ACTOR2" is greater than "ACTOR1", so Actor 2 keeps the transaction, knowing that Actor 1 should delete it
 
 This approach allows for the case in which Actor1 and Actor2 are simultaneously merging, similarly to when they simultaneously added the transaction
 
@@ -126,12 +126,12 @@ It is quite possible however for Actor 1 to become stale, and never get rid of t
 The following workflow should be read in the voice of Actor 2:
 
 If we have held onto a duplicate this long, we meet the following criteria:
-1) We are the actor who is supposed to keep this duplicate while the other removes it
-2) We have had enough time to do :history_length number of transactions since the other actor
+1. We are the actor who is supposed to keep this duplicate while the other removes it
+2. We have had enough time to do :history_length number of transactions since the other actor
     has performed a merge
-3) If they stay dormant and the txn remains untouched there, I shouldn't count it
-4) If they are currently merging and about to count it, I also shouldn't count it for fear of counting it twice,
-5) The third possibility is the following:
+3. If they stay dormant and the txn remains untouched there, I shouldn't count it
+4. If they are currently merging and about to count it, I also shouldn't count it for fear of counting it twice,
+5. The third possibility is the following:
     Actor 1 attempts to write transaction 1, it takes a long time, application decides to retry after timeout
     Actor 2 manages to successfully write transaction 1, and then :history_length - 1 more writes and
       is currently deciding what to do with that transaction ("hmmm, should I count it?")
@@ -141,14 +141,6 @@ If we have held onto a duplicate this long, we meet the following criteria:
       knowing it is the inferior actor, Actor 1 removes without counting. But at this stage, Actor 2 wouldn't have known that Actor 1 ever even had transaction 1, and would have correctly counted the value
 
 Given that 5) would actually be handled by the second line of defense, this leaves us with 3) and 4). Since both of those situations result in Actor 1 counting the value, during the compression phases of Actor 2's merge, if the duplicate transaction is about to be deleted, Actor 2 would remove the transaction without counting it towards it's own total.
-
-
-
-
-
-
-
-
 
  ## Other Possible Approaches to the Idempotent Counter Problem
 

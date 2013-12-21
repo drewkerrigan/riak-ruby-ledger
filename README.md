@@ -53,7 +53,7 @@ Function | Description
 Name | Description
 --- | ---
 `:retry_count`[Integer] | When a write to Riak is a "maybe" (500, timeout, or any other error condition), resubmit the request `:retry_count` number of times, and return false if it is still unsuccessful
-`:history_length`[Integer] | Keep up to `:history_length` number of transactions in each actor's section of the underlying GCounter. When the (`:history_length` + 1)th transaction is written, add the oldest transaction's value to the actor's total
+`:history_length`[Integer] | Keep up to `:history_length` number of transactions in each actor's section of the underlying GCounter. When the (`:history_length` + 1)th transaction is written then merged, add the oldest transaction's value to the actor's total
 
 ***More information about the implementation and how edge cases can be avoided***: [[docs/implementation.md]](https://github.com/drewkerrigan/riak-ruby-ledger/blob/master/docs/implementation.md)
 
