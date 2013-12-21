@@ -1,4 +1,4 @@
-require_relative '../test_helper'
+require_relative '../../test_helper'
 
 describe Riak::CRDT::TPNCounter do
   options1 = {:actor => "ACTOR1", :history_length => 5}
@@ -59,39 +59,40 @@ describe Riak::CRDT::TPNCounter do
 
   it "must merge" do
     counter = Riak::CRDT::TPNCounter.new(options1)
-    counter.increment("txn1", 10)
-    counter.increment("txn2", 10)
-    counter.increment("txn1", 10)
-    counter.increment("txn1", 10)
-    counter.decrement("txn3", 5)
+    counter.increment("txn1", 10) #ignore
+    counter.increment("txn2", 10) #ignore
+    counter.increment("txn1", 10) #ignore
+    counter.increment("txn1", 10) #ignore
+    counter.decrement("txn3", 5) #keep
 
-    counter.increment("txn4", 10)
-    counter.increment("txn5", 10)
-    counter.increment("txn6", 10)
-    counter.increment("txn7", 10)
-    counter.decrement("txn8", 5)
+    counter.increment("txn4", 10) #ignore
+    counter.increment("txn5", 10) #keep
+    counter.increment("txn6", 10) #keep
+    counter.increment("txn7", 10) #keep
+    counter.decrement("txn8", 5) #keep
 
     counter2 = Riak::CRDT::TPNCounter.new(options2)
-    counter2.increment("txn1", 10)
-    counter2.increment("txn2", 10)
-    counter2.increment("txn4", 10)
-    counter2.increment("txn1", 10)
-    counter2.decrement("txn5", 1)
+    counter2.increment("txn1", 10) #ignore
+    counter2.increment("txn2", 10) #keep
+    counter2.increment("txn4", 10) #keep
+    counter2.increment("txn1", 10) #keep
+    counter2.decrement("txn14", 1) #keep
 
-    counter2.increment("txn9", 10)
-    counter2.increment("txn10", 10)
-    counter2.increment("txn11", 10)
-    counter2.increment("txn12", 10)
-    counter2.decrement("txn13", 1)
+    counter2.increment("txn9", 10) #keep
+    counter2.increment("txn10", 10) #keep
+    counter2.increment("txn11", 10) #keep
+    counter2.increment("txn12", 10) #keep
+    counter2.decrement("txn13", 1) #keep
 
     counter.merge(counter2)
 
     assert_equal(0, counter.p.counts["ACTOR1"]["total"])
     assert_equal(88, counter.value)
 
+    counter.increment("txn9", 10) #ignore, keep in actor 1 even though actor 2 would normally have it
     counter2.merge(counter)
 
-    assert_equal(20, counter2.p.counts["ACTOR2"]["total"])
+    assert_equal(10, counter2.p.counts["ACTOR2"]["total"])
     assert_equal(88, counter2.value)
   end
 end

@@ -1,49 +1,94 @@
 # Riak-Ruby-Ledger
 
-A PNCounter CRDT with ledger transaction ids for tunable retry policies
+An alternative to Riak Counters with idempotent writes within a client defined window.
 
-## Summary of Functionality
+# Summary
 
-### What does it do?
+### Quick Links
 
-This gem attempts to provide a tunable Counter option by combining non-idempotent GCounters and a partially idempotent GSet for calculating a running counter or ledger.
+Below are a few documents that are relevant to this gem, **please read before considering using this gem for anything important**.
 
-#### Zero Transaction History
-CRDT PNCounters (two GCounters) such as Riak Counters are non-idempotent, and store nothing about a counter transaction other than the final value. As such it doesn't make sense to use them to store any counter that needs to be accurate.
+##### Riak Ruby Ledger Docs
 
-#### Entire Transaction History
-Another approach would be to use a CRDT GSet to store the entire set of transactions, and calculate the current value from the unique list of transaction ids. While accurate, this isn't feasible for many use cases due to the space it consumes.
+Document Link | Description
+--- | ---
+[[docs/riak_counter_drift.md]](https://github.com/drewkerrigan/riak-ruby-ledger/blob/master/docs/riak_counter_drift.md) | Why Riak Counters may or may not work for your use case (Counter Drift).
+[[docs/implementation.md]](https://github.com/drewkerrigan/riak-ruby-ledger/blob/master/docs/implementation.md) | Implementation details about this gem as well as some of the reasoning behind the approach.
+[[docs/usage.md]](https://github.com/drewkerrigan/riak-ruby-ledger/blob/master/docs/usage.md) | Suggested usage of this gem from your application, and implications of changing various settings.
+[[docs/release_notes.md](https://github.com/drewkerrigan/riak-ruby-ledger/blob/master/docs/release_notes.md)] | Information about what changed in each version
 
-#### Tunable Transaction History
-By allowing clients to set how many transactions to keep in the counter object as well as set a retry policy on the Riak actions performed on the counter, a good balance can be achieved. The `Riak::Ledger` class in this gem can be instantiated with the following options:
+### Counter Drift
 
-```
-:actor => Actor ID, one per thread or serialized writer
-:history_length => Number of transactions to store per actor per type (credit or debit)
-:retry_count => Number of times to retry Riak requests if they fail
-```
+**Why shouldn't I use Riak Counters?**
 
-Furthermore, each `#credit!` and `#debit!` action against the ledger takes an (assumed) globally unique `transaction` id that is determined by your application.
+CRDT PNCounters (two plain GCounters) such as Riak Counters are non-idempotent and store nothing about a counter transaction other than the final value. This means that if an increment operation fails in any number of ways (500 response from server, process that made the call dies, network connection is interrupted, operation times out, etc), your application now has no idea whether or not the increment actually happened.
 
-These options combined give you reasonable guarentees that a single transaction can be retried per counter continually as long as less than X number of other transactions are applied to the same counter (where X is the `:history_length`).
+**What is Counter Drift?**
 
-The gem will automatically retry `:retry_count` number of times, and if it still fails after that you can define a secondary retry or reconciliation policy within your application to deal with the failure, although if the actions are continually failing, it is possible that something is systematically wrong with your Riak cluster.
+In the above situation of a failed increment operation, your application has two choices:
 
-### What doesn't it do?
+1. Retry the operation: This could result in the operation occuring twice causing what is called **positive counter drift**
+2. Don't retry the operation: This could result in the operation never occuring at all causing **negative counter drift**
 
-This gem cannot guarentee transaction idempotence over the entire lifetime of a counter for greater than `:history_length` number of transactions. If your application requires this level of idempotence on a counter, a slower reading GSet based implementation may be right for you, but keep in mind this will penalize the most active users of the counter.
+As such it doesn't make sense to use plain GCounters or PNCounters to store any counter that needs to be accurate.
 
-### Further Reading
+***More information about Riak Counters and Drift***: [[docs/riak_counter_drift.md]](https://github.com/drewkerrigan/riak-ruby-ledger/blob/master/docs/riak_counter_drift.md)
 
-In order to attempt to best meet the requirements of *most* counters that cannot be satisfied with Riak Counters, this gem implements approach ***2b*** described in the [Problem Statement](https://github.com/drewkerrigan/riak-ruby-ledger/tree/ack-refactor#problem-statement) below as it should handle the most likely retry scenarios for most applications.
+### Implementation
 
-CRDT paper from Shapiro et al. at INRIA [http://hal.upmc.fr/docs/00/55/55/88/PDF/techreport.pdf](http://hal.upmc.fr/docs/00/55/55/88/PDF/techreport.pdf)
+The data type implemented is a PNCounter CRDT with an ordered array of transactions for each GCounter actor. Transaction ids are stored with the GCounter, so operations against this counter are idempotent while the transaction remains in any actor's array.
 
-Riak Counters: [http://basho.com/counters-in-riak-1-4/](http://basho.com/counters-in-riak-1-4/)
+**High Level API**
 
-Other Riak Data Types: [github.com/basho/riak_dt](https://github.com/basho/riak_dt)
+Function | Description
+--- | ---
+`Riak::Ledger.new` | Creates a new Ledger instance
+`Riak::Ledger.find!` | Finds an existing Ledger in Riak, merges it locally, and then writes the merged value back to Riak
+`#credit!`, `#debit!`, `#update!` | Reads the existing state of the ledger from Riak, merges it locally, and adds a new `transaction` and positive or negative `value`
 
-## Installation
+**Ledger Options**
+
+Name | Description
+--- | ---
+`:retry_count`[Integer] | When a write to Riak is a "maybe" (500, timeout, or any other error condition), resubmit the request `:retry_count` number of times, and return false if it is still unsuccessful
+`:history_length`[Integer] | Keep up to `:history_length` number of transactions in each actor's section of the underlying GCounter. When the (`:history_length` + 1)th transaction is written then merged, add the oldest transaction's value to the actor's total
+
+***More information about the implementation and how edge cases can be avoided***: [[docs/implementation.md]](https://github.com/drewkerrigan/riak-ruby-ledger/blob/master/docs/implementation.md)
+
+### Suggested Usage and Configuration
+
+Depending on your use case, you may want to tweak the configuration options `:history_length` and `:retry_count`.
+
+The default `:history_length` is 10. This means that if a transaction fails, but your application is unable to determine whether or not the counter was actually incremented, you have a buffer space or window of 9 additional transactions on that counter before you can no longer retry the original failed transaction without assuming counter drift is happening.
+
+The default `:retry_count` is also 10. This means that if a transaction fails, the actor that attempted the transaction will continue trying 9 more times. If the request to change the counter still fails after the 10th try, the operation will return `false` for failure. At this point your application can attempt to try the transaction again, or return a failure to the user with a note that the transaction will be retried in the future.
+
+An example of a failure might look like the following:
+
+1. transaction1 fails with actor1, and because of the nature of the failure, your application is unsure whether or not the counter was actually incremented.
+
+	1. If your `:retry_count` is low, you can quickly determine in your application that something went wrong, and inform the user that the transaction was unsuccessful for now, but will be attempted later
+	2. If your `:retry_count` is high, the user will be kept waiting longer, but the odds of the transaction eventually working are higher
+2. If after the initial retries, the transaction was still a failure, your application must decide what to do next
+
+	1. If your `:history_length` is low, your options are limited. You must continue to retry that same failed transaction for that user (using any available actor) until it is successful. If you allow additional transactions to take place on the same counter before retrying, you run a high risk of counter drift.
+	2. If your `:history_length` is medium-high, then you have an allowance of (`:history_length` - 1) additional transactions for that counter before you run the risk of counter drift.
+
+**Note**
+
+This gem cannot guarentee transaction idempotence of a counter for greater than `:history_length` number of transactions.
+
+***More information about configuration and implications of changing various settings***: [[docs/usage.md]](https://github.com/drewkerrigan/riak-ruby-ledger/blob/master/docs/usage.md)
+
+### Additional Reading
+
+Document Link | Description
+--- | ---
+[[http://hal.upmc.fr/docs/00/55/55/88/PDF/techreport.pdf](http://hal.upmc.fr/docs/00/55/55/88/PDF/techreport.pdf)] | CRDT paper from Shapiro et al. at INRIA
+[[http://basho.com/counters-in-riak-1-4/](http://basho.com/counters-in-riak-1-4/)] | Riak Counters
+[[github.com/basho/riak_dt](https://github.com/basho/riak_dt)] | Other Riak Data Types
+
+# Installation
 
 Add this line to your application's Gemfile:
 
@@ -57,7 +102,7 @@ Or install it yourself as:
 
     $ gem install riak-ruby-ledger
 
-## Usage
+# Usage
 
 ### Initialize
 
@@ -65,7 +110,7 @@ Or install it yourself as:
 require 'riak' # riak-client gem
 require 'ledger' # riak-ruby-ledger gem
 
-# Name your thread
+# Name each of your threads
 Thread.current["name"] = "ACTOR1"
 
 # Create a Riak::Client instance
@@ -148,269 +193,7 @@ ledger.has_transaction? "txn6" #true
 ledger.delete()
 ```
 
-## Problem Statement
-
-### When to use Riak Counters
-
-Riak Counters are very well suited for certain problems:
-
-* Facebook likes
-* Youtube views
-* Reddit upvotes
-* Twitter followers
-* Any non-critical counts
-    * Counts that do not adversely affect applications or users when off by a few
-
-### When not to use Riak Counters
-
-* Currency (virtual or real) balances
-* Metrics that result in charging a customer
-    * Keeping track of how many calls are made to a paid API endpoint
-    * Storage used by a user
-* Real-time counts
-* Any critical counts
-    * Counts that must be accurate
-
-### Counter Drift
-
-Riak Counters as currently implemented are not ***idempotent***. This simply means that you cannot retry the same increment or decrement operation more than once.
-
-Take the following scenario into consideration:
-
-1. User buys an in-game item that costs 50 gold, and has a current balance of 100 gold
-2. Application server attempts to debit user's account 50 gold
-    a. If Riak successfully returns 200 response code, no problem!
-    b. If Riak returns 500 (or any other error code), we don't have any way of knowing whether or not the operation succeeded
-    c. If the application server fails at any point in the execution, we also don't have a good way of knowing whether or not the operation succeeded
-
-In the case of 2b and 2c, we have the following choices:
-
-* Retry the operation (Risk absolute positive drift)
-    * If the original counter decrement was successful, we have now debited the user's balance twice, thereby charging them 100 gold for a 50 gold item
-* Never retry (Risk absolute negative drift)
-    * If the original counter decrement was unsuccessful, we gave the user an item for free
-
-## Idempotent Counters
-
-There are several approaches to making counters varying degrees of idempotent, the ones relative to the goals of this gem described here.
-
-### Definitions
-
-* ***Transaction id***: Globally unique externally generated transaction id that is available per counter action (increment or decrement)
-* ***Actor***: A thread, process, or server that is able to serially perform actions (a single actor can never perform actions in parallel with itself)
-* ***Sibling***: In Riak, when you write to the same key without specifying a vector clock, a sibling is created. This is denoted below as `[...sibling1..., ...sibling2...]`.
-
-### Approach 1: Ensure idempotent counter actions at any time, by any actor
-
-This is possible if the entire transaction history is stored inside of the counter object:
-
-Actor 1 writes txn1: 50
-
-```
-{"txn1": 50}
-```
-
-Actor 2 writes txn1: 50, txn2: 100
-
-```
-[
-	#sibling 1
-	{"txn1": 50},
-	#sibling 2
-	{"txn1": 50, "txn2": 100}
-]
-```
-
-Actor 1 reads and merges value
-
-```
-{"txn1": 50, "txn2": 100}
-```
-
-Total: 150
-
-This is not a counter, but a ***GSet***, because the entire set of transactions needs to be stored with the object. The total for a counter is defined by the sum of the entire set of values
-
-***Pros***: 
-
-* Retry any action at any time by any actor in the system.
-* Optimize for writes: No need to read the value prior to writing a new transaction.
-
-***Cons***: 
-
-* GSet sizes can become too large for ruby to handle. If more than ~1000 transactions are expected for a single counter, this approach should not be used
-
-
-### Approach 2a: Ensure idempotent counter actions by any actor, for the current transaction
-
-In this approach, the transaction id is stored per actor for the most recently written transaction
-
-Actor 1 writes txn1: 50
-
-```
-Actor1: {"total": 0} {"txn1": 50}
-```
-
-Actor 2 attempts to write txn1: 50
-
-Actor 2 reads current value and sees that txn1 has already been written, ignores it's own txn1
-
-Actor 2 writes merged value
-
-```
-Actor1: {"total": 0} {"txn1": 50}
-```
-
-Actor 2 Writes txn2: 100
-
-```
-Actor1: {"total": 0} {"txn1": 50}
-Actor2: {"total": 0} {"txn2": 100}
-```
-
-Actor 2 Reads current value, and writes txn3: 10 along with it's own merged data
-
-```
-Actor1: {"total": 0} {"txn1": 50}
-Actor2: {"total": 100} {"txn3": 10}
-```
-
-Actor 1 reads and merges value
-
-```
-Actor1: {"total": 0} {"txn1": 50}
-Actor2: {"total": 100} {"txn3": 10}
-```
-
-Total: 160
-
-***Pros***: 
-
-* Retry an action with any actor in the system, assuming the actions are serialized per counter
-* Optimize for reads: Since a very small amount of data is stored in the counter, reads should be very fast
-
-***Cons***: 
-
-* Counter drift is a possibility in the case where transaction 1 fails, several other transactions succeed without retrying transaction 1, and then transaction 1 is tried again
-
-### Approach 2b: Ensure idempotent counter actions by any actor, for the previous `X` transactions
-
-This approach is the same as 2a, but instead of only storing the most previous transaction, we store the most previous `X` transactions. In this example we'll use X=5
-
-Actor 1 writes txn1: 50, txn2: 10, txn3: 100 (order is preserved using an array instead of a hash for transactions)
-
-```
-Actor1: {"total": 0} [["txn1", 50], ["txn2", 10], ["txn3", 100]]}
-```
-
-Actor 2 attempts to write txn1: 50
-
-Actor 2 reads current value and sees that txn1 has already been written, ignores it's own txn1
-
-Actor 2 writes merged value
-
-```
-Actor1: {"total": 0} [["txn1", 50], ["txn2", 10], ["txn3", 100]]
-```
-
-Actor 2 Writes txn4: 100
-
-```
-Actor1: {"total": 0} [["txn1", 50], ["txn2", 10], ["txn3", 100]]
-Actor2: {"total": 0} [["txn4", 100]]
-```
-
-Actor 1 Writes txn5: 20, txn6: 20
-
-```
-Actor1: {"total": 0} [["txn1", 50], ["txn2", 10], ["txn3", 100], ["txn5", 20], ["txn6", 20]]
-Actor2: {"total": 0} [["txn4", 100]]
-```
-
-Actor 1 Writes txn7: 30, and writes it's own merged data
-
-```
-Actor1: {"total": 50} [["txn2", 10], ["txn3", 100], ["txn5", 20], ["txn6", 20], ["txn7", 30]]
-Actor2: {"total": 0} [["txn4", 100]]
-```
-
-Actor 1 reads and merges value
-
-```
-Actor1: {"total": 50} [["txn2", 10], ["txn3", 100], ["txn5", 20], ["txn6", 20], ["txn7", 30]]
-Actor2: {"total": 0} [["txn4", 100]]
-```
-
-Total: 330
-
-***Pros***: 
-
-* Retry an action with any actor in the system, for the last X actions
-* Optimize for reads: Since a very small amount of data is stored in the counter, reads should be very fast
-
-***Cons***: 
-
-* Counter drift is a possibility in the case where transaction 1 fails, X + 1 actions occur, and transaction 1 is retried
-
-### Approach 3: Ensure idempotent counter actions by a single actor, for the current transaction
-
-In this approach, a globally unique transaction id is no longer required, because we are assuming that only a single actor can ever be responsible for a single transaction
-
-Actor 1 writes request1: 50, the request shows an error, but the write actually occurred in Riak
-
-```
-Actor1: {"total": 0} {"request1": 50}
-```
-
-Actor 1 retries request1: 50, the request succeeds, but since request1 is already there, it is ignored and returns a success to the client
-
-```
-Actor1: {"total": 0} {"request1": 50}
-```
-
-Actor 1 writes request2: 100, the request succeeds
-
-```
-Actor1: {"total": 50} {"request2": 100}
-```
-
-Actor 2 writes request3: 10. Since request ids are only unique to the actor, no cross-actor uniqueness check can be made.
-
-```
-Actor1: {"total": 50} {"request2": 100}
-Actor2: {"total": 0} {"request3": 10}
-```
-
-Actor 2 Writes request4: 100
-
-```
-Actor1: {"total": 50} {"request2": 100}
-Actor2: {"total": 10} {"request4": 100}
-```
-
-Actor 1 reads and merges value
-
-```
-Actor1: {"total": 50} {"request2": 100}
-Actor2: {"total": 10} {"request4": 100}
-```
-
-Total: 260
-
-***Pros***: 
-
-* No reliance on an external globally unique transaction id
-* Optimize for reads: Since a very small amount of data is stored in the counter, reads should be very fast
-
-***Cons***: 
-
-* Counter drift is a possibility if any action is retried by someone other than the current actor during it's current transaction
-
-## Conclusion
-
-In order to attempt to best meet the requirements of *most* counters that cannot be satisfied with Riak Counters, this gem implements approach ***2b*** as it should handle the most likely retry scenarios for most applications.
-
-## Contributing
+# Contributing
 
 1. Fork it
 2. Create your feature branch (`git checkout -b my-new-feature`)
