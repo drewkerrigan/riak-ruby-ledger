@@ -80,7 +80,7 @@ This gem cannot guarentee transaction idempotence of a counter for greater than 
 
 ***More information about configuration and implications of changing various settings***: [[docs/usage.md]](https://github.com/drewkerrigan/riak-ruby-ledger/blob/master/docs/usage.md)
 
-##### Additional Reading
+### Additional Reading
 
 Document Link | Description
 --- | ---
