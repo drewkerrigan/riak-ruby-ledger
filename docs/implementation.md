@@ -145,17 +145,17 @@ If we have held onto a duplicate this long, we meet the following criteria:
 
 Given that 5) would actually be handled by the second line of defense, this leaves us with 3) and 4). Since both of those situations result in Actor 1 counting the value, during the compression phases of Actor 2's merge, if the duplicate transaction is about to be deleted, Actor 2 would remove the transaction without counting it towards it's own total.
 
- ## Other Possible Approaches to the Idempotent Counter Problem
+## Other Possible Approaches to the Idempotent Counter Problem
 
  There are several approaches to making counters varying degrees of idempotent, the ones relative to the goals of this gem described here.
 
- ### Definitions
+### Definitions
 
  * ***Transaction id***: Globally unique externally generated transaction id that is available per counter action (increment or decrement)
  * ***Actor***: A thread, process, or server that is able to serially perform actions (a single actor can never perform actions in parallel with itself)
  * ***Sibling***: In Riak, when you write to the same key without specifying a vector clock, a sibling is created. This is denoted below as `[...sibling1..., ...sibling2...]`.
 
- ### Approach 1: Ensure idempotent counter actions at any time, by any actor
+### Approach 1: Ensure idempotent counter actions at any time, by any actor
 
  This is possible if the entire transaction history is stored inside of the counter object:
 
@@ -196,7 +196,7 @@ Given that 5) would actually be handled by the second line of defense, this leav
  * GSet sizes can become too large for ruby to handle. If more than ~1000 transactions are expected for a single counter, this approach should not be used
 
 
- ### Approach 2a: Ensure idempotent counter actions by any actor, for the current transaction
+### Approach 2a: Ensure idempotent counter actions by any actor, for the current transaction
 
  In this approach, the transaction id is stored per actor for the most recently written transaction
 
@@ -248,7 +248,7 @@ Given that 5) would actually be handled by the second line of defense, this leav
 
  * Counter drift is a possibility in the case where transaction 1 fails, several other transactions succeed without retrying transaction 1, and then transaction 1 is tried again
 
- ### Approach 2b: Ensure idempotent counter actions by any actor, for the previous `X` transactions
+### Approach 2b: Ensure idempotent counter actions by any actor, for the previous `X` transactions
 
  This approach is the same as 2a, but instead of only storing the most previous transaction, we store the most previous `X` transactions. In this example we'll use X=5
 
@@ -307,7 +307,7 @@ Given that 5) would actually be handled by the second line of defense, this leav
 
  * Counter drift is a possibility in the case where transaction 1 fails, X + 1 actions occur, and transaction 1 is retried
 
- ### Approach 3: Ensure idempotent counter actions by a single actor, for the current transaction
+### Approach 3: Ensure idempotent counter actions by a single actor, for the current transaction
 
  In this approach, a globally unique transaction id is no longer required, because we are assuming that only a single actor can ever be responsible for a single transaction
 
@@ -361,6 +361,6 @@ Given that 5) would actually be handled by the second line of defense, this leav
 
  * Counter drift is a possibility if any action is retried by someone other than the current actor during it's current transaction
 
- ## Conclusion
+## Conclusion
 
  In order to attempt to best meet the requirements of *most* counters that cannot be satisfied with Riak Counters, this gem implements approach ***2b*** as it should handle the most likely retry scenarios for most applications.
