@@ -10,10 +10,8 @@ CRDT PNCounters (two plain GCounters) such as Riak Counters are non-idempotent a
 
 In the above situation of a failed increment operation, your application has two choices:
 
-1. Retry the operation
-	a. This could result in the operation occuring twice causing what is called **positive counter drift**
-2. Don't retry the operation
-	b. This could result in the operation never occuring at all causing **negative counter drift**
+1. Retry the operation: This could result in the operation occuring twice causing what is called **positive counter drift**
+2. Don't retry the operation: This could result in the operation never occuring at all causing **negative counter drift**
 
 As such it doesn't make sense to use plain GCounters or PNCounters to store any counter that needs to be accurate.
 
