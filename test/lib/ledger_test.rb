@@ -105,38 +105,52 @@ describe Riak::Ledger do
     assert @ledger1.has_transaction? "txn11"
   end
 
-  it "must merge a two actors" do
-    @ledger1.debit!("txn1", 10)
-    @ledger1.credit!("txn2", 10)
-    @ledger1.credit!("txn3", 10)
-    @ledger1.credit!("txn4", 10)
-    @ledger1.credit!("txn5", 10)
-    @ledger2.debit!("txn6", 10)
-    @ledger2.credit!("txn7", 10)
-    @ledger2.credit!("txn8", 10)
-    @ledger2.credit!("txn9", 10)
-    @ledger2.credit!("txn10", 10)
+  it "must merge two actors" do
+    @ledger1.debit!("txn1", 10) #-10
+    @ledger1.credit!("txn2", 10) #0 p1
+    @ledger1.credit!("txn3", 10) #10 p2
+    @ledger1.credit!("txn4", 10) #20 p3
+    @ledger1.credit!("txn5", 10) #30 p4
+    @ledger2.debit!("txn6", 10) #20
+    @ledger2.credit!("txn7", 10) #30 p1
+    @ledger2.credit!("txn8", 10) #40 p2
+    @ledger2.credit!("txn9", 10) #50 p3
+    @ledger2.credit!("txn10", 10) #60 p4
 
-    @ledger1.credit!("txn11", 10)
-    @ledger1.credit!("txn11", 10)
-    @ledger2.credit!("txn11", 10)
-    @ledger2.credit!("txn11", 10)
+    @ledger1.credit!("txn11", 10) #70 p5
+    @ledger1.credit!("txn11", 10) #70 #ignore
+    @ledger2.credit!("txn11", 10) #70 #ignore
+    @ledger2.credit!("txn11", 10) #70 #ignore
 
-    assert_equal 110, @ledger1.value
+    @ledger2.credit!("txn12", 10) #80 p5
+    @ledger2.credit!("txn13", 10) #90 p6
+    @ledger2.credit!("txn14", 10) #100 p7
+
+    assert_equal 70, @ledger1.value #premerge
+    @ledger1 = Riak::Ledger.find!(@bucket, @key, options1)
+    assert_equal 100, @ledger1.value #postmerge
+
+    assert_equal 100, @ledger2.value
+
     #1st 6 transactions were merged into total
-    assert_equal 60, @ledger1.counter.p.counts["ACTOR1"]["total"]
+    assert_equal 10, @ledger2.counter.p.counts["ACTOR2"]["total"] #merged 1
+    @ledger2 = Riak::Ledger.find!(@bucket, @key, options2)
+    assert_equal 20, @ledger2.counter.p.counts["ACTOR2"]["total"] #merged 2
 
-    refute @ledger1.has_transaction? "txn1"
-    refute @ledger1.has_transaction? "txn2"
-    refute @ledger1.has_transaction? "txn3"
-    refute @ledger1.has_transaction? "txn4"
-    refute @ledger1.has_transaction? "txn5"
-    refute @ledger1.has_transaction? "txn6"
-    assert @ledger1.has_transaction? "txn7"
-    assert @ledger1.has_transaction? "txn8"
-    assert @ledger1.has_transaction? "txn9"
-    assert @ledger1.has_transaction? "txn10"
-    assert @ledger1.has_transaction? "txn11"
+    #pickup 2's merges
+    @ledger1 = Riak::Ledger.find!(@bucket, @key, options1)
+
+    assert_equal true, (@ledger1.has_transaction? "txn1")
+    assert_equal true, (@ledger1.has_transaction? "txn2")
+    assert_equal true, (@ledger1.has_transaction? "txn3")
+    assert_equal true, (@ledger1.has_transaction? "txn4")
+    assert_equal true, (@ledger1.has_transaction? "txn5")
+    assert_equal true, (@ledger1.has_transaction? "txn6")
+    assert_equal false, (@ledger1.has_transaction? "txn7")
+    assert_equal false, (@ledger1.has_transaction? "txn8")
+    assert_equal true, (@ledger1.has_transaction? "txn9")
+    assert_equal true, (@ledger1.has_transaction? "txn10")
+    assert_equal true, (@ledger1.has_transaction? "txn11")
   end
 
 end

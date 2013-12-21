@@ -1,7 +1,6 @@
-#### *Notice*
+## Release notes
 
 ##### Version 0.0.4 and Counter Drift
-
 
 In version 0.0.4 of this gem, counter drift is still a possibility. Take the following scenario into consideration:
 

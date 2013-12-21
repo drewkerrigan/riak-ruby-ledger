@@ -68,7 +68,7 @@ module Riak::CRDT
       txns = Hash.new()
 
       self.counts.each do |a, values|
-        next unless a == for_actor
+        next if for_actor && a != for_actor
         values["txns"].arr.each do |arr|
           txns[arr[0]] = arr[1]
         end
@@ -158,8 +158,7 @@ module Riak::CRDT
     def remove_duplicates()
       self.duplicate_transactions_by_actor().each do |a, txns|
         # Spaceship operator, if my actor is of greater value than theirs, skip because they should remove the dupe
-        next if (self.actor <=> a) == -1
-
+        next if (self.actor <=> a) == 1
         txns.each do |txn|
           self.counts[self.actor]["txns"].delete(txn)
         end
