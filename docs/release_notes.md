@@ -21,7 +21,7 @@ This is an unlikely but possible scenario. Here are some ways to reduce or elimi
     1. This is unimplemented in this gem as of now, but depending on the thoughts of others, I may add it as an optional policy.
 3. Attach a microsecond epoch to each transaction so that during merges the the duplicate transaction with the highest epoch always wins.
     1. This is unimplemented in this gem, and it would only lessen the statistical likelihood of 2c happening, it would still be possible. Because it only lowers the likelihood.
-4. Do a string compare on the actor ids, whichever has the highest string compare value always keeps it's version of the duplicate transaction.
+4. Do a string compare on the actor ids, whichever has the highest string compare value always keeps it's version of the duplicate transaction. If one the lesser actor is stale and never merges, the actor that should keep the transaction will throw it away knowing that the stale actor will keep it.
     1. This is now implemented in version 0.1.0, see below.
 
 ##### Version 0.0.5 and Actor Naming [***Important***]
