@@ -1,5 +1,7 @@
 # Riak-Ruby-Ledger
 
+[![Gem Version](https://badge.fury.io/rb/riak-ruby-ledger.png)](http://badge.fury.io/rb/riak-ruby-ledger)
+
 An alternative to Riak Counters with idempotent writes within a client defined window.
 
 # Summary
