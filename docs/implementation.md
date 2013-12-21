@@ -114,8 +114,9 @@ This situation would result in siblings getting created where the merged result 
 Upon Actor 2's or Actor 1's next merge, they will find that there is indeed a duplicate, and the following logic happens in order to deal with the duplicate:
 
 1. A merge occurs, and a string comparison on the actors' ids takes place to see who should own the transaction
-    a. If Actor 1 is merging, "ACTOR1" is less than "ACTOR2", so Actor 1 gets rid of the transaction without counting it
-    b. If Actor 2 is merging, "ACTOR2" is greater than "ACTOR1", so Actor 2 keeps the transaction, knowing that Actor 1 should delete it
+
+	1. If Actor 1 is merging, "ACTOR1" is less than "ACTOR2", so Actor 1 gets rid of the transaction without counting it
+	2. If Actor 2 is merging, "ACTOR2" is greater than "ACTOR1", so Actor 2 keeps the transaction, knowing that Actor 1 should delete it
 
 This approach allows for the case in which Actor1 and Actor2 are simultaneously merging, similarly to when they simultaneously added the transaction
 
@@ -126,18 +127,20 @@ It is quite possible however for Actor 1 to become stale, and never get rid of t
 The following workflow should be read in the voice of Actor 2:
 
 If we have held onto a duplicate this long, we meet the following criteria:
+
 1. We are the actor who is supposed to keep this duplicate while the other removes it
 2. We have had enough time to do :history_length number of transactions since the other actor
     has performed a merge
 3. If they stay dormant and the txn remains untouched there, I shouldn't count it
 4. If they are currently merging and about to count it, I also shouldn't count it for fear of counting it twice,
 5. The third possibility is the following:
-    Actor 1 attempts to write transaction 1, it takes a long time, application decides to retry after timeout
-    Actor 2 manages to successfully write transaction 1, and then :history_length - 1 more writes and
+    
+    1. Actor 1 attempts to write transaction 1, it takes a long time, application decides to retry after timeout
+    2. Actor 2 manages to successfully write transaction 1, and then :history_length - 1 more writes and
       is currently deciding what to do with that transaction ("hmmm, should I count it?")
-    While that merge is happening, Actor 1 finally finishes writing transaction 1 and now Actor 2's
+    3. While that merge is happening, Actor 1 finally finishes writing transaction 1 and now Actor 2's
       request is taking a long time for some reason
-    While still waiting on Actor 2, Actor 1 performs another merge and sees that Actor 2 has transaction 1
+    4. While still waiting on Actor 2, Actor 1 performs another merge and sees that Actor 2 has transaction 1
       knowing it is the inferior actor, Actor 1 removes without counting. But at this stage, Actor 2 wouldn't have known that Actor 1 ever even had transaction 1, and would have correctly counted the value
 
 Given that 5) would actually be handled by the second line of defense, this leaves us with 3) and 4). Since both of those situations result in Actor 1 counting the value, during the compression phases of Actor 2's merge, if the duplicate transaction is about to be deleted, Actor 2 would remove the transaction without counting it towards it's own total.
