@@ -11,11 +11,13 @@ The default `:retry_count` is also 10. This means that if a transaction fails, t
 An example of a failure might look like the following:
 
 1. transaction1 fails with actor1, and because of the nature of the failure, your application is unsure whether or not the counter was actually incremented.
-	a. If your `:retry_count` is low, you can quickly determine in your application that something went wrong, and inform the user that the transaction was unsuccessful for now, but will be attempted later
-	b. If your `:retry_count` is high, the user will be kept waiting longer, but the odds of the transaction eventually working are higher
+
+	1. If your `:retry_count` is low, you can quickly determine in your application that something went wrong, and inform the user that the transaction was unsuccessful for now, but will be attempted later
+	2. If your `:retry_count` is high, the user will be kept waiting longer, but the odds of the transaction eventually working are higher
 2. If after the initial retries, the transaction was still a failure, your application must decide what to do next
-	a. If your `:history_length` is low, your options are limited. You must continue to retry that same failed transaction for that user (using any available actor) until it is successful. If you allow additional transactions to take place on the same counter before retrying, you run a high risk of counter drift.
-	b. If your `:history_length` is medium-high, then you have an allowance of (`:history_length` - 1) additional transactions for that counter before you run the risk of counter drift.
+
+	1. If your `:history_length` is low, your options are limited. You must continue to retry that same failed transaction for that user (using any available actor) until it is successful. If you allow additional transactions to take place on the same counter before retrying, you run a high risk of counter drift.
+	2. If your `:history_length` is medium-high, then you have an allowance of (`:history_length` - 1) additional transactions for that counter before you run the risk of counter drift.
 
 **Note**
 
