@@ -16,6 +16,8 @@ module Riak
     #     :retry_count [Integer]: default 10
     #   }
     def initialize(bucket, key, options={})
+      raise ArgumentError, 'Argument "bucket" must have "allow_mult" property set to true' unless bucket.allow_mult
+
       self.bucket = bucket
       self.key = key
       self.retry_count = options[:retry_count] || 10
@@ -24,10 +26,6 @@ module Riak
       self.counter_options[:actor] = options[:actor] || Thread.current["name"] || "ACTOR1"
       self.counter_options[:history_length] = options[:history_length] || 10
       self.counter = Riak::CRDT::TPNCounter.new(self.counter_options)
-
-      unless bucket.allow_mult
-        self.bucket.allow_mult = true
-      end
     end
 
     # Find an existing Ledger object, merge and save it
