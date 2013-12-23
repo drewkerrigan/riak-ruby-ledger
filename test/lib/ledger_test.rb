@@ -9,6 +9,7 @@ describe Riak::Ledger do
   before do
     client = Riak::Client.new pb_port: 8087
     @bucket = client["ledger_test"]
+    @bucket.allow_mult = true
     @key = "player_1"
 
 
@@ -21,8 +22,17 @@ describe Riak::Ledger do
     @ledger2.delete()
   end
 
-  it "have a valid starting state" do
+  it "must raise an error if mult is not allowed" do
+    @bucket.allow_mult = false
 
+    assert_raises ArgumentError do
+      Riak::Ledger.new(@bucket, @key, options1)
+    end
+
+    @bucket.allow_mult = true
+  end
+
+  it "have a valid starting state" do
     assert_equal({:type=>"TGCounter", :c=>{"ACTOR1"=>{"total"=>0, "txns"=>[]}}}, @ledger1.counter.p.to_hash)
     assert_equal({:type=>"TGCounter", :c=>{"ACTOR1"=>{"total"=>0, "txns"=>[]}}}, @ledger1.counter.n.to_hash)
   end

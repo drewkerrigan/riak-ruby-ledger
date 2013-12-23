@@ -118,6 +118,12 @@ Thread.current["name"] = "ACTOR1"
 # Create a Riak::Client instance
 client = Riak::Client.new pb_port: 8087
 
+# Get the Riak::Bucket instance
+bucket = client["ledgers"]
+
+# Set allow_mult to true
+bucket.allow_mult = true unless bucket.allow_mult
+
 # Default option values
 options = {
 	:actor => Thread.current["name"], # Actor ID, one per thread or serialized writer
@@ -127,7 +133,7 @@ options = {
 
 # Create the ledger object
 #                         Riak::Bucket        Key        Hash
-ledger = Riak::Ledger.new(client["ledgers"], "player_1", options)
+ledger = Riak::Ledger.new(, "player_1", options)
 ```
 
 ### Credit and debit
