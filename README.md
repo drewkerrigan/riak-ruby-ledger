@@ -133,7 +133,7 @@ options = {
 
 # Create the ledger object
 #                         Riak::Bucket        Key        Hash
-ledger = Riak::Ledger.new(, "player_1", options)
+ledger = Riak::Ledger.new(bucket, "player_1", options)
 ```
 
 ### Credit and debit
