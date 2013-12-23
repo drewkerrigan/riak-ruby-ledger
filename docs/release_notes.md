@@ -31,3 +31,7 @@ Solution 4 has been implemented to the potential counter drift caused by two sim
 As a result, keep in mind that when naming actors, they will be compared for ordering purposes
 
 Example: "ACTOR2" is greater than "ACTOR1", so ACTOR1 will always remove it's version of a duplicate transaction during a merge, and "ACTOR2" will never remove it's version unless it thinks actor 1 is stale. Avoid using actor ids that could potentially result in string equality.
+
+##### Version 0.0.5
+
+Removed the automatic setting of allow_mult on the bucket in Riak::Ledger. Please remember to set allow_mult to true on your ledger bucket, notes in README.md
