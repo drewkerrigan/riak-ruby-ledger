@@ -56,9 +56,29 @@ module Riak::CRDT
       self.p.has_transaction?(transaction) || self.n.has_transaction?(transaction)
     end
 
-    def merge(other)
-      self.p.merge(other.p)
-      self.n.merge(other.n)
+    def merge(other, sibling_compression_counter_p = nil, sibling_compression_counter_n = nil)
+      self.p.merge(other.p, sibling_compression_counter_p)
+      self.n.merge(other.n, sibling_compression_counter_n)
     end
+
+    def merge_siblings(siblings, counter_options)
+      sibling_compression_counter_p = {}
+      sibling_compression_counter_n = {}
+
+      siblings.each do | sibling |
+        unless sibling.raw_data.nil? or sibling.raw_data.empty?
+          self.merge(Riak::CRDT::TPNCounter.from_json(sibling.raw_data, counter_options), sibling_compression_counter_p, sibling_compression_counter_n)
+        end
+      end
+
+      # add the unique transactions from all siblings totals to the total counter
+      sibling_compression_counter_p.each do |actor, txn_map|
+        self.p.counts[actor]["total"] += txn_map.values.inject(0, &:+)
+      end
+      sibling_compression_counter_n.each do |actor, txn_map|
+        self.n.counts[actor]["total"] += txn_map.values.inject(0, &:+)
+      end
+    end
+
   end
 end

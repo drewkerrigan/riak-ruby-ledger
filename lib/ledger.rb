@@ -13,6 +13,8 @@ module Riak
     #   {
     #     :actor [String]: default Thread.current["name"] || "ACTOR1"
     #     :history_length [Integer]: default 10
+    #     :merge_history_length [Integer]: default 50 - number of recently merged transactions to keep track of
+    #        (should be equal to number of actors that may act on a given ledger at the same time)
     #     :retry_count [Integer]: default 10
     #   }
     def initialize(bucket, key, options={})
@@ -25,6 +27,7 @@ module Riak
       self.counter_options = {}
       self.counter_options[:actor] = options[:actor] || Thread.current["name"] || "ACTOR1"
       self.counter_options[:history_length] = options[:history_length] || 10
+      self.counter_options[:merge_history_length] = options[:merge_history_length] || 50
       self.counter = Riak::CRDT::TPNCounter.new(self.counter_options)
     end
 
@@ -134,11 +137,7 @@ module Riak
       self.counter = Riak::CRDT::TPNCounter.new(self.counter_options)
 
       if obj.siblings.length > 1
-        obj.siblings.each do | sibling |
-          unless sibling.raw_data.nil? or sibling.raw_data.empty?
-            self.counter.merge(Riak::CRDT::TPNCounter.from_json(sibling.raw_data, self.counter_options))
-          end
-        end
+        self.counter.merge_siblings(obj.siblings, self.counter_options)
       elsif !obj.raw_data.nil?
         self.counter.merge(Riak::CRDT::TPNCounter.from_json(obj.raw_data, self.counter_options))
       end

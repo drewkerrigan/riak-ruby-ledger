@@ -33,8 +33,8 @@ describe Riak::Ledger do
   end
 
   it "have a valid starting state" do
-    assert_equal({:type=>"TGCounter", :c=>{"ACTOR1"=>{"total"=>0, "txns"=>[]}}}, @ledger1.counter.p.to_hash)
-    assert_equal({:type=>"TGCounter", :c=>{"ACTOR1"=>{"total"=>0, "txns"=>[]}}}, @ledger1.counter.n.to_hash)
+    assert_equal({:type=>"TGCounter", :c=>{"ACTOR1"=>{"total"=>0, "txns"=>[], "merge_history"=>[]}}}, @ledger1.counter.p.to_hash)
+    assert_equal({:type=>"TGCounter", :c=>{"ACTOR1"=>{"total"=>0, "txns"=>[], "merge_history"=>[]}}}, @ledger1.counter.n.to_hash)
   end
 
   it "must credit and debit" do
@@ -161,6 +161,41 @@ describe Riak::Ledger do
     assert_equal true, (@ledger1.has_transaction? "txn9")
     assert_equal true, (@ledger1.has_transaction? "txn10")
     assert_equal true, (@ledger1.has_transaction? "txn11")
+  end
+
+  it "must handle concurrency" do
+
+    ledger_options = { :actor => "result", :history_length => 10, :retry_count => 10, :merge_history_length => 30 }
+    client = Riak::Client.new pb_port: 8087
+    bucket  = 'concurrency_ledger_test'
+    concurrency_bucket = client[bucket]
+    concurrency_bucket.allow_mult = true if !concurrency_bucket.allow_mult
+    key     = concurrency_bucket.get_or_new("concurrency_player_1").key
+    Riak::Ledger.new(concurrency_bucket, key, ledger_options).delete
+
+    #recreate key to avoid I18n exception
+    key = concurrency_bucket.get_or_new("concurrency_player_1").key
+
+    10.times do |d|
+      threads = []
+
+      # 11 actors
+      0.upto(10) do |c|
+        thread = Thread.new(concurrency_bucket, c) do |concurrency_bucket, c|
+          concurrency_ledger = Riak::Ledger.new(concurrency_bucket, key, ledger_options.merge({ :actor => "actor#{c}" }))
+          concurrency_ledger.credit!("txn#{c}.#{d}", 10)
+        end
+        thread.abort_on_exception = true
+        threads << thread
+      end
+      threads.each { |th| th.join }
+
+      concurrency_ledger = Riak::Ledger.find!(concurrency_bucket, key, ledger_options)
+
+      assert_equal 110, concurrency_ledger.value
+      concurrency_ledger.debit!("wipe#{d}", concurrency_ledger.value)
+    end
+
   end
 
 end

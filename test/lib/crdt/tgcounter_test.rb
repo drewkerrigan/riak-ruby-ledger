@@ -47,7 +47,7 @@ describe Riak::CRDT::TGCounter do
   end
 
   it "must translate to and from json" do
-    json = "{\"type\":\"TGCounter\",\"c\":{\"ACTOR1\":{\"total\":0,\"txns\":[[\"txn1\",10],[\"txn2\",10]]}}}"
+    json = "{\"type\":\"TGCounter\",\"c\":{\"ACTOR1\":{\"total\":0,\"txns\":[[\"txn1\",10],[\"txn2\",10]],\"merge_history\":[]}}}"
     counter = Riak::CRDT::TGCounter.new(options1)
     counter.increment("txn1", 10)
     counter.increment("txn2", 10)
