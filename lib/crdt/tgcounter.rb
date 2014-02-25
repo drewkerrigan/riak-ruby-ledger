@@ -1,6 +1,6 @@
 module Riak::CRDT
   class TGCounter
-    attr_accessor :counts, :actor, :history_length
+    attr_accessor :counts, :actor, :history_length, :merge_history_length
 
     # Create a new Transaction GCounter
     # @param [Hash] options
@@ -11,10 +11,12 @@ module Riak::CRDT
     def initialize(options)
       self.actor = options[:actor]
       self.history_length = options[:history_length]
+      self.merge_history_length = options[:merge_history_length] || 50
       self.counts = Hash.new()
       self.counts[self.actor] = Hash.new()
       self.counts[self.actor]["total"] = 0
       self.counts[self.actor]["txns"] = TransactionArray.new()
+      self.counts[self.actor]["merge_history"] = []
     end
 
     def to_hash
@@ -23,6 +25,7 @@ module Riak::CRDT
         c[a] = Hash.new()
         c[a]["total"] = values["total"]
         c[a]["txns"] = values["txns"].arr
+        c[a]["merge_history"] = values["merge_history"]
       end
 
       {
@@ -42,6 +45,7 @@ module Riak::CRDT
         gc.counts[a] = Hash.new() unless gc.counts[a]
         gc.counts[a]["total"] = values["total"]
         gc.counts[a]["txns"] = TransactionArray.new(values["txns"])
+        gc.counts[a]["merge_history"] = values["merge_history"]
       end
 
       return gc
@@ -117,6 +121,7 @@ module Riak::CRDT
       total = self.unique_transactions().values.inject(0, &:+)
 
       self.counts.values.each do |a|
+        #puts a.inspect
         total += a["total"]
       end
 
@@ -127,16 +132,35 @@ module Riak::CRDT
     # transactions and compress oldest transactions that exceed the
     # :history_length param into actor's total
     # @param [TGCounter] other
-    def merge(other)
+    def merge(other, sibling_compression_counter = nil)
       self.merge_actors(other)
       self.remove_duplicates()
-      self.compress_history()
+      self.compress_history(sibling_compression_counter)
+    end
+
+    def cleanup_merge_history
+      # truncate merge history
+      if self.counts[actor]["merge_history"].length > self.merge_history_length
+        amount_to_slice = merge_history_current_length - merge_history_max_length
+        self.counts[actor]["merge_history"].slice!(0..amount_to_slice - 1)
+      end
+    end
+
+    def recently_merged?(actor, txn)
+      self.counts[actor]["merge_history"].include?(txn)
     end
 
     # Combine all actors' data
     def merge_actors(other)
       other.counts.each do |other_actor, other_values|
         if self.counts[other_actor]
+          # Merge in their merge history
+          if self.counts[other_actor]["merge_history"] != other_values["merge_history"]
+            self.counts[other_actor]["merge_history"] << other_values["merge_history"]
+            self.counts[other_actor]["merge_history"].flatten!.uniq!
+            self.cleanup_merge_history
+          end
+
           # Max of totals
           mine = self.counts[other_actor]["total"]
           self.counts[other_actor]["total"] = [mine, other_values["total"]].max
@@ -144,14 +168,27 @@ module Riak::CRDT
           # Max of unique transactions
           other_values["txns"].arr.each do |arr|
             other_txn, other_value = arr
-            mine = (self.counts[other_actor]["txns"][other_txn]) ?
-                self.counts[other_actor]["txns"][other_txn] : 0
-            self.counts[other_actor]["txns"][other_txn] = [mine, other_value].max
+            if(!recently_merged?(other_actor, other_txn))
+              mine = (self.counts[other_actor]["txns"][other_txn]) ?
+                  self.counts[other_actor]["txns"][other_txn] : 0
+              self.counts[other_actor]["txns"][other_txn] = [mine, other_value].max
+            else
+              self.counts[other_actor]["txns"].delete(other_txn)
+            end
           end
         else
           self.counts[other_actor] = other_values
+          self.counts[other_actor]["txns"].arr.each do |(txn, val)|
+            self.counts[other_actor]["txns"].delete(txn) if recently_merged?(other_actor, txn)
+          end
         end
+
+        self.counts[other_actor]["txns"].arr.each do |(txn, val)|
+          self.counts[other_actor]["txns"].delete(txn) if recently_merged?(other_actor, txn)
+        end
+
       end
+
     end
 
     # Remove duplicate transactions if other actors have claimed them
@@ -166,7 +203,7 @@ module Riak::CRDT
     end
 
     # Compress this actor's data based on history_length
-    def compress_history()
+    def compress_history(compression_counter = nil)
       total = 0
 
       duplicates = self.duplicate_transactions()
@@ -175,7 +212,13 @@ module Riak::CRDT
         to_delete = self.counts[actor]["txns"].length - self.history_length
         self.counts[actor]["txns"].arr.slice!(0..to_delete - 1).each do |arr|
           txn, val = arr
-          total += val unless duplicates.member? txn
+          if !compression_counter.nil?
+            compression_counter[actor] ||= {}
+            compression_counter[actor][txn] = val
+          else
+            total += val unless duplicates.member? txn
+          end
+          self.counts[actor]["merge_history"] << txn
         end
       end
 
