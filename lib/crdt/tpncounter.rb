@@ -4,7 +4,7 @@ module Riak::CRDT
   class TPNCounter
     attr_accessor :p, :n
 
-    # Create a new Transaction PNCounter
+    # Create a new Request_id PNCounter
     # @param [Hash] options
     #   {
     #     :actor [String]
@@ -34,49 +34,38 @@ module Riak::CRDT
       return pnc
     end
 
-    # Increment this actor's positive transaction array, overwriting if the value exists
-    # @param [String] transaction
+    # Increment this actor's positive request_id array, overwriting if the value exists
+    # @param [String] request_id
     # @param [Integer] value
-    def increment(transaction, value)
-      self.p.increment(transaction, value)
+    def increment(request_id, value)
+      self.p.increment(request_id, value)
     end
 
-    # Increment this actor's negative transaction array, overwriting if the value exists
-    # @param [String] transaction
+    # Increment this actor's negative request_id array, overwriting if the value exists
+    # @param [String] request_id
     # @param [Integer] value
-    def decrement(transaction, value)
-      self.n.increment(transaction, value)
+    def decrement(request_id, value)
+      self.n.increment(request_id, value)
     end
 
     def value
       self.p.value - self.n.value
     end
 
-    def has_transaction?(transaction)
-      self.p.has_transaction?(transaction) || self.n.has_transaction?(transaction)
+    def has_request_id?(request_id)
+      self.p.has_request_id?(request_id) || self.n.has_request_id?(request_id)
     end
 
-    def merge(other, sibling_compression_counter_p = nil, sibling_compression_counter_n = nil)
-      self.p.merge(other.p, sibling_compression_counter_p)
-      self.n.merge(other.n, sibling_compression_counter_n)
+    def merge(other)
+      self.p.merge(other.p)
+      self.n.merge(other.n)
     end
 
     def merge_siblings(siblings, counter_options)
-      sibling_compression_counter_p = {}
-      sibling_compression_counter_n = {}
-
       siblings.each do | sibling |
         unless sibling.raw_data.nil? or sibling.raw_data.empty?
-          self.merge(Riak::CRDT::TPNCounter.from_json(sibling.raw_data, counter_options), sibling_compression_counter_p, sibling_compression_counter_n)
+          self.merge(Riak::CRDT::TPNCounter.from_json(sibling.raw_data, counter_options))
         end
-      end
-
-      # add the unique transactions from all siblings totals to the total counter
-      sibling_compression_counter_p.each do |actor, txn_map|
-        self.p.counts[actor]["total"] += txn_map.values.inject(0, &:+)
-      end
-      sibling_compression_counter_n.each do |actor, txn_map|
-        self.n.counts[actor]["total"] += txn_map.values.inject(0, &:+)
       end
     end
 

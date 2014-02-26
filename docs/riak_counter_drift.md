@@ -4,7 +4,7 @@
 
 **Why shouldn't I use Riak Counters?**
 
-CRDT PNCounters (two plain GCounters) such as Riak Counters are non-idempotent and store nothing about a counter transaction other than the final value. This means that if an increment operation fails in any number of ways (500 response from server, process that made the call dies, network connection is interrupted, operation times out, etc), your application now has no idea whether or not the increment actually happened.
+CRDT PNCounters (two plain GCounters) such as Riak Counters are non-idempotent and store nothing about a counter request_id other than the final value. This means that if an increment operation fails in any number of ways (500 response from server, process that made the call dies, network connection is interrupted, operation times out, etc), your application now has no idea whether or not the increment actually happened.
 
 **What is Counter Drift?**
 
