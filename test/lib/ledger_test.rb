@@ -12,7 +12,6 @@ describe Riak::Ledger do
     @bucket.allow_mult = true
     @key = "player_1"
 
-
     @ledger1 = Riak::Ledger.new(@bucket, @key, options1)
     @ledger2 = Riak::Ledger.new(@bucket, @key, options2)
   end
@@ -33,40 +32,40 @@ describe Riak::Ledger do
   end
 
   it "have a valid starting state" do
-    assert_equal({:type=>"TGCounter", :c=>{"ACTOR1"=>{"total"=>0, "txns"=>[], "merge_history"=>[]}}}, @ledger1.counter.p.to_hash)
-    assert_equal({:type=>"TGCounter", :c=>{"ACTOR1"=>{"total"=>0, "txns"=>[], "merge_history"=>[]}}}, @ledger1.counter.n.to_hash)
+    assert_equal({:type=>"TGCounter", :c=>{"ACTOR1"=>{"total"=>0, "requests"=>[]}}}, @ledger1.counter.p.to_hash)
+    assert_equal({:type=>"TGCounter", :c=>{"ACTOR1"=>{"total"=>0, "requests"=>[]}}}, @ledger1.counter.n.to_hash)
   end
 
   it "must credit and debit" do
-    @ledger1.credit!("txn1", 10)
-    @ledger1.credit!("txn1", 10)
-    @ledger1.credit!("txn1", 10)
+    @ledger1.credit!(10, "req1")
+    @ledger1.credit!(10, "req1")
+    @ledger1.credit!(10, "req1")
 
     assert_equal 10, @ledger1.value
 
-    @ledger1.debit!("txn2", 5)
-    @ledger1.debit!("txn2", 5)
-    @ledger1.debit!("txn2", 5)
+    @ledger1.debit!(5, "req2")
+    @ledger1.debit!(5, "req2")
+    @ledger1.debit!(5, "req2")
 
     assert_equal 5, @ledger1.value
   end
 
-  it "must have transaction" do
-    @ledger1.credit!("txn1", 10)
-    @ledger1.debit!("txn2", 5)
+  it "must have request_id" do
+    @ledger1.credit!(10, "req1")
+    @ledger1.debit!(5, "req2")
 
-    assert @ledger1.has_transaction? "txn1"
-    assert @ledger1.has_transaction? "txn2"
-    refute @ledger1.has_transaction? "txn3"
+    assert @ledger1.has_request_id? "req1"
+    assert @ledger1.has_request_id? "req2"
+    refute @ledger1.has_request_id? "req3"
   end
 
   it "must save and find counters" do
-    @ledger1.credit!("txn1", 10)
-    @ledger1.debit!("txn2", 5)
-    @ledger2.credit!("txn1", 10) #ignore
-    @ledger2.debit!("txn2", 5) #ignore
-    @ledger2.debit!("txn3", 1)
-    @ledger2.credit!("txn5", 100)
+    @ledger1.credit!(10, "req1")
+    @ledger1.debit!(5, "req2")
+    @ledger2.credit!(10, "req1") #ignore
+    @ledger2.debit!(5, "req2") #ignore
+    @ledger2.debit!(1, "req3")
+    @ledger2.credit!(100, "req5")
 
     l1 = Riak::Ledger.find!(@bucket, @key, options1)
 
@@ -75,66 +74,65 @@ describe Riak::Ledger do
     assert_equal 104, l1.value
     assert_equal 104, l2.value
 
-    assert l1.has_transaction? "txn1"
-    assert l1.has_transaction? "txn2"
-    assert l1.has_transaction? "txn5"
-    refute l1.has_transaction? "txn4"
+    assert l1.has_request_id? "req1"
+    assert l1.has_request_id? "req2"
+    assert l1.has_request_id? "req5"
+    refute l1.has_request_id? "req4"
   end
 
   it "must merge a single actor" do
-    @ledger1.credit!("txn1", 10)
-    @ledger1.credit!("txn2", 10)
-    @ledger1.credit!("txn3", 10)
-    @ledger1.credit!("txn4", 10)
-    @ledger1.credit!("txn5", 10)
-    @ledger1.credit!("txn6", 10)
-    @ledger1.credit!("txn7", 10)
-    @ledger1.credit!("txn8", 10)
-    @ledger1.credit!("txn9", 10)
-    @ledger1.credit!("txn10", 10)
+    @ledger1.credit!(10, "req1")
+    @ledger1.credit!(10, "req2")
+    @ledger1.credit!(10, "req3")
+    @ledger1.credit!(10, "req4")
+    @ledger1.credit!(10, "req5")
+    @ledger1.credit!(10, "req6")
+    @ledger1.credit!(10, "req7")
+    @ledger1.credit!(10, "req8")
+    @ledger1.credit!(10, "req9")
+    @ledger1.credit!(10, "req10")
 
-    @ledger1.credit!("txn11", 10)
-    @ledger1.credit!("txn11", 10)
-    @ledger1.credit!("txn11", 10)
-    @ledger1.credit!("txn11", 10)
+    @ledger1.credit!(10, "req11")
+    @ledger1.credit!(10, "req11")
+    @ledger1.credit!(10, "req11")
+    @ledger1.credit!(10, "req11")
 
     assert_equal 110, @ledger1.value
-    #1st 5 transactions were merged into total
-    assert_equal 60, @ledger1.counter.p.counts["ACTOR1"]["total"]
+    assert_equal 110, @ledger1.counter.p.counts["ACTOR1"]["total"]
 
-    refute @ledger1.has_transaction? "txn1"
-    refute @ledger1.has_transaction? "txn2"
-    refute @ledger1.has_transaction? "txn3"
-    refute @ledger1.has_transaction? "txn4"
-    refute @ledger1.has_transaction? "txn5"
-    refute @ledger1.has_transaction? "txn6"
-    assert @ledger1.has_transaction? "txn7"
-    assert @ledger1.has_transaction? "txn8"
-    assert @ledger1.has_transaction? "txn9"
-    assert @ledger1.has_transaction? "txn10"
-    assert @ledger1.has_transaction? "txn11"
+    refute @ledger1.has_request_id? "req1"
+    refute @ledger1.has_request_id? "req2"
+    refute @ledger1.has_request_id? "req3"
+    refute @ledger1.has_request_id? "req4"
+    refute @ledger1.has_request_id? "req5"
+    refute @ledger1.has_request_id? "req6"
+    assert @ledger1.has_request_id? "req7"
+    assert @ledger1.has_request_id? "req8"
+    assert @ledger1.has_request_id? "req9"
+    assert @ledger1.has_request_id? "req10"
+    assert @ledger1.has_request_id? "req11"
   end
 
   it "must merge two actors" do
-    @ledger1.debit!("txn1", 10) #-10
-    @ledger1.credit!("txn2", 10) #0 p1
-    @ledger1.credit!("txn3", 10) #10 p2
-    @ledger1.credit!("txn4", 10) #20 p3
-    @ledger1.credit!("txn5", 10) #30 p4
-    @ledger2.debit!("txn6", 10) #20
-    @ledger2.credit!("txn7", 10) #30 p1
-    @ledger2.credit!("txn8", 10) #40 p2
-    @ledger2.credit!("txn9", 10) #50 p3
-    @ledger2.credit!("txn10", 10) #60 p4
+    @ledger1.debit!(10, "req1")
+    @ledger1.credit!(10, "req2")
+    @ledger1.credit!(10, "req3")
+    @ledger1.credit!(10, "req4")
+    @ledger1.credit!(10, "req5")
+    @ledger2.debit!(10, "req6")
+    @ledger2.credit!(10, "req7")
+    @ledger2.credit!(10, "req8")
+    @ledger2.credit!(10, "req9")
+    @ledger2.credit!(10, "req10")
 
-    @ledger1.credit!("txn11", 10) #70 p5
-    @ledger1.credit!("txn11", 10) #70 #ignore
-    @ledger2.credit!("txn11", 10) #70 #ignore
-    @ledger2.credit!("txn11", 10) #70 #ignore
+    @ledger1.credit!(10, "req11")
+    @ledger1.credit!(10, "req11")
+    @ledger2.credit!(10, "req11")
+    @ledger2.credit!(10, "req11")
 
-    @ledger2.credit!("txn12", 10) #80 p5
-    @ledger2.credit!("txn13", 10) #90 p6
-    @ledger2.credit!("txn14", 10) #100 p7
+    @ledger2.credit!(10, "req12")
+    @ledger2.credit!(10, "req13")
+    @ledger2.credit!(10, "req14")
 
     assert_equal 70, @ledger1.value #premerge
     @ledger1 = Riak::Ledger.find!(@bucket, @key, options1)
@@ -142,30 +140,28 @@ describe Riak::Ledger do
 
     assert_equal 100, @ledger2.value
 
-    #1st 6 transactions were merged into total
-    assert_equal 10, @ledger2.counter.p.counts["ACTOR2"]["total"] #merged 1
+    assert_equal 70, @ledger2.counter.p.counts["ACTOR2"]["total"]
     @ledger2 = Riak::Ledger.find!(@bucket, @key, options2)
-    assert_equal 20, @ledger2.counter.p.counts["ACTOR2"]["total"] #merged 2
+    assert_equal 70, @ledger2.counter.p.counts["ACTOR2"]["total"]
 
     #pickup 2's merges
     @ledger1 = Riak::Ledger.find!(@bucket, @key, options1)
 
-    assert_equal true, (@ledger1.has_transaction? "txn1")
-    assert_equal true, (@ledger1.has_transaction? "txn2")
-    assert_equal true, (@ledger1.has_transaction? "txn3")
-    assert_equal true, (@ledger1.has_transaction? "txn4")
-    assert_equal true, (@ledger1.has_transaction? "txn5")
-    assert_equal true, (@ledger1.has_transaction? "txn6")
-    assert_equal false, (@ledger1.has_transaction? "txn7")
-    assert_equal false, (@ledger1.has_transaction? "txn8")
-    assert_equal true, (@ledger1.has_transaction? "txn9")
-    assert_equal true, (@ledger1.has_transaction? "txn10")
-    assert_equal true, (@ledger1.has_transaction? "txn11")
+    assert_equal true, (@ledger1.has_request_id? "req1")
+    assert_equal true, (@ledger1.has_request_id? "req2")
+    assert_equal true, (@ledger1.has_request_id? "req3")
+    assert_equal true, (@ledger1.has_request_id? "req4")
+    assert_equal true, (@ledger1.has_request_id? "req5")
+    assert_equal true, (@ledger1.has_request_id? "req6")
+    assert_equal false, (@ledger1.has_request_id? "req7")
+    assert_equal false, (@ledger1.has_request_id? "req8")
+    assert_equal true, (@ledger1.has_request_id? "req9")
+    assert_equal true, (@ledger1.has_request_id? "req10")
+    assert_equal true, (@ledger1.has_request_id? "req11")
   end
 
   it "must handle concurrency" do
-
-    ledger_options = { :actor => "result", :history_length => 10, :retry_count => 10, :merge_history_length => 30 }
+    ledger_options = { :actor => "result", :history_length => 10, :retry_count => 10 }
     client = Riak::Client.new pb_port: 8087
     bucket  = 'concurrency_ledger_test'
     concurrency_bucket = client[bucket]
@@ -183,7 +179,7 @@ describe Riak::Ledger do
       0.upto(10) do |c|
         thread = Thread.new(concurrency_bucket, c) do |concurrency_bucket, c|
           concurrency_ledger = Riak::Ledger.new(concurrency_bucket, key, ledger_options.merge({ :actor => "actor#{c}" }))
-          concurrency_ledger.credit!("txn#{c}.#{d}", 10)
+          concurrency_ledger.credit!(10, "req#{c}.#{d}")
         end
         thread.abort_on_exception = true
         threads << thread
@@ -193,7 +189,7 @@ describe Riak::Ledger do
       concurrency_ledger = Riak::Ledger.find!(concurrency_bucket, key, ledger_options)
 
       assert_equal 110, concurrency_ledger.value
-      concurrency_ledger.debit!("wipe#{d}", concurrency_ledger.value)
+      concurrency_ledger.debit!(concurrency_ledger.value, "wipe#{d}")
     end
 
   end

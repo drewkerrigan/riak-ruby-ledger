@@ -9,7 +9,7 @@ Gem::Specification.new do |spec|
   spec.authors       = ["drewkerrigan"]
   spec.email         = ["dkerrigan@basho.com"]
   spec.description   = %q{An alternative to Riak Counters with idempotent writes within a client defined window}
-  spec.summary       = %q{The data type implemented is a PNCounter CRDT with an ordered array of transactions for each GCounter actor. Transaction ids are stored with the GCounter, so operations against this counter are idempotent while the transaction remains in any actor's array.}
+  spec.summary       = %q{The data type implemented is a PNCounter CRDT with an ordered array of request_ids for each GCounter actor. Request ids are stored with the GCounter, so operations against this counter are idempotent while the request_id remains in any actor's array.}
   spec.homepage      = "https://github.com/drewkerrigan/riak-ruby-ledger"
   spec.license       = "Apache2"
 

@@ -23,7 +23,7 @@ Document Link | Description
 
 **Why shouldn't I use Riak Counters?**
 
-CRDT PNCounters (two plain GCounters) such as Riak Counters are non-idempotent and store nothing about a counter transaction other than the final value. This means that if an increment operation fails in any number of ways (500 response from server, process that made the call dies, network connection is interrupted, operation times out, etc), your application now has no idea whether or not the increment actually happened.
+CRDT PNCounters (two plain GCounters) such as Riak Counters are non-idempotent and store nothing about a counter request_id other than the final value. This means that if an increment operation fails in any number of ways (500 response from server, process that made the call dies, network connection is interrupted, operation times out, etc), your application now has no idea whether or not the increment actually happened.
 
 **What is Counter Drift?**
 
@@ -38,7 +38,7 @@ As such it doesn't make sense to use plain GCounters or PNCounters to store any 
 
 ### Implementation
 
-The data type implemented is a PNCounter CRDT with an ordered array of transactions for each GCounter actor. Transaction ids are stored with the GCounter, so operations against this counter are idempotent while the transaction remains in any actor's array.
+The data type implemented is a PNCounter CRDT with an ordered array of request_ids for each GCounter actor. Request ids are stored with the GCounter, so operations against this counter are idempotent while the request_id remains in any actor's array.
 
 **High Level API**
 
@@ -46,14 +46,14 @@ Function | Description
 --- | ---
 `Riak::Ledger.new` | Creates a new Ledger instance
 `Riak::Ledger.find!` | Finds an existing Ledger in Riak, merges it locally, and then writes the merged value back to Riak
-`#credit!`, `#debit!`, `#update!` | Reads the existing state of the ledger from Riak, merges it locally, and adds a new `transaction` and positive or negative `value`
+`#credit!`, `#debit!`, `#update!` | Reads the existing state of the ledger from Riak, merges it locally, and adds a new `request_id` and positive or negative `value`
 
 **Ledger Options**
 
 Name | Description
 --- | ---
 `:retry_count`[Integer] | When a write to Riak is a "maybe" (500, timeout, or any other error condition), resubmit the request `:retry_count` number of times, and return false if it is still unsuccessful
-`:history_length`[Integer] | Keep up to `:history_length` number of transactions in each actor's section of the underlying GCounter. When the (`:history_length` + 1)th transaction is written then merged, add the oldest transaction's value to the actor's total
+`:history_length`[Integer] | Keep up to `:history_length` number of request_ids in each actor's section of the underlying GCounter. When the (`:history_length` + 1)th request_id is written then merged, add the oldest request_id's value to the actor's total
 
 ***More information about the implementation and how edge cases can be avoided***: [[docs/implementation.md]](https://github.com/drewkerrigan/riak-ruby-ledger/blob/master/docs/implementation.md)
 
@@ -61,24 +61,24 @@ Name | Description
 
 Depending on your use case, you may want to tweak the configuration options `:history_length` and `:retry_count`.
 
-The default `:history_length` is 10. This means that if a transaction fails, but your application is unable to determine whether or not the counter was actually incremented, you have a buffer space or window of 9 additional transactions on that counter before you can no longer retry the original failed transaction without assuming counter drift is happening.
+The default `:history_length` is 10. This means that if a request_id fails, but your application is unable to determine whether or not the counter was actually incremented, you have a buffer space or window of 9 additional request_ids on that counter before you can no longer retry the original failed request_id without assuming counter drift is happening.
 
-The default `:retry_count` is also 10. This means that if a transaction fails, the actor that attempted the transaction will continue trying 9 more times. If the request to change the counter still fails after the 10th try, the operation will return `false` for failure. At this point your application can attempt to try the transaction again, or return a failure to the user with a note that the transaction will be retried in the future.
+The default `:retry_count` is also 10. This means that if a request_id fails, the actor that attempted the request_id will continue trying 9 more times. If the request to change the counter still fails after the 10th try, the operation will return `false` for failure. At this point your application can attempt to try the request_id again, or return a failure to the user with a note that the request_id will be retried in the future.
 
 An example of a failure might look like the following:
 
-1. transaction1 fails with actor1, and because of the nature of the failure, your application is unsure whether or not the counter was actually incremented.
+1. request_id1 fails with actor1, and because of the nature of the failure, your application is unsure whether or not the counter was actually incremented.
 
-	1. If your `:retry_count` is low, you can quickly determine in your application that something went wrong, and inform the user that the transaction was unsuccessful for now, but will be attempted later
-	2. If your `:retry_count` is high, the user will be kept waiting longer, but the odds of the transaction eventually working are higher
-2. If after the initial retries, the transaction was still a failure, your application must decide what to do next
+	1. If your `:retry_count` is low, you can quickly determine in your application that something went wrong, and inform the user that the request_id was unsuccessful for now, but will be attempted later
+	2. If your `:retry_count` is high, the user will be kept waiting longer, but the odds of the request_id eventually working are higher
+2. If after the initial retries, the request_id was still a failure, your application must decide what to do next
 
-	1. If your `:history_length` is low, your options are limited. You must continue to retry that same failed transaction for that user (using any available actor) until it is successful. If you allow additional transactions to take place on the same counter before retrying, you run a high risk of counter drift.
-	2. If your `:history_length` is medium-high, then you have an allowance of (`:history_length` - 1) additional transactions for that counter before you run the risk of counter drift.
+	1. If your `:history_length` is low, your options are limited. You must continue to retry that same failed request_id for that user (using any available actor) until it is successful. If you allow additional request_ids to take place on the same counter before retrying, you run a high risk of counter drift.
+	2. If your `:history_length` is medium-high, then you have an allowance of (`:history_length` - 1) additional request_ids for that counter before you run the risk of counter drift.
 
 **Note**
 
-This gem cannot guarentee transaction idempotence of a counter for greater than `:history_length` number of transactions.
+This gem cannot guarentee request_id idempotence of a counter for greater than `:history_length` number of request_ids.
 
 ***More information about configuration and implications of changing various settings***: [[docs/usage.md]](https://github.com/drewkerrigan/riak-ruby-ledger/blob/master/docs/usage.md)
 
@@ -127,7 +127,7 @@ bucket.allow_mult = true unless bucket.allow_mult
 # Default option values
 options = {
 	:actor => Thread.current["name"], # Actor ID, one per thread or serialized writer
-	:history_length => 10, # Number of transactions to store per actor per type (credit or debit)
+	:history_length => 10, # Number of request_ids to store per actor per type (credit or debit)
 	:retry_count => 10 # Number of times to retry Riak requests if they fail
 }
 
@@ -137,13 +137,29 @@ ledger = Riak::Ledger.new(bucket, "player_1", options)
 
 ### Credit and debit
 
+#### With a request id:
+
 ```
-ledger.credit!("transaction1", 50)
+ledger.credit!(50, "request_id1")
 ledger.value # 50
-ledger.debit!("transaction2", 10)
+ledger.debit!(10, "request_id2")
 ledger.value # 40
 
-ledger.debit!("transaction2", 10)
+ledger.debit!(10, "request_id2")
+ledger.value # 40
+```
+
+#### Without a request id:
+
+If no request id is given, a UUID will be generated. If a credit! or debit! call fails, the generated request id will be provided for retries
+
+```
+ledger.credit!(50)
+ledger.value # 50
+ledger.debit!(10)
+ledger.value # 40
+
+ledger.debit!(10)
 ledger.value # 40
 ```
 
@@ -156,11 +172,11 @@ ledger.value # 40
 
 ### Request success
 
-If a call to `#debit!` or `#credit!` does not return false, then the transaction can be considered saved, because it would have retried otherwise. Still, for debugging, testing, or external failure policies, `#has_transaction?` is also exposed
+If a call to `#debit!` or `#credit!` does not return false, then the request_id can be considered saved, because it would have retried otherwise. Still, for debugging, testing, or external failure policies, `#has_request_id?` is also exposed
 
 ```
-ledger.has_transaction? "transaction2" # true
-ledger.has_transaction? "transaction1" # true
+ledger.has_request_id? "request_id2" # true
+ledger.has_request_id? "request_id1" # true
 ```
 
 ### Merging after history_length is reached
@@ -171,27 +187,26 @@ For this example, the `:history_length` is lowered to 3 so it gets reached faste
 options = {:history_length => 3}
 ledger = Riak::Ledger.new(client["ledgers"], "player_2", options)
 
-ledger.credit!("txn1", 10)
-ledger.credit!("txn2", 10)
-ledger.credit!("txn3", 10)
-ledger.credit!("txn4", 10)
-ledger.credit!("txn5", 10)
-ledger.credit!("txn6", 10)
+ledger.credit!(10, "req1")
+ledger.credit!(10, "req2")
+ledger.credit!(10, "req3")
+ledger.credit!(10, "req4")
+ledger.credit!(10, "req5")
 
 ledger.value #60
 
-ledger.has_transaction? "txn1" #false
-ledger.has_transaction? "txn2" #false
-ledger.has_transaction? "txn3" #true
+ledger.has_request_id? "req1" #false
+ledger.has_request_id? "req2" #false
+ledger.has_request_id? "req3" #true
 
-# txn3 is still in the history because the most previous write does not trigger a merge of the actor's total
+# req3 is still in the history because the most previous write does not trigger a merge of the actor's total
 # Performing a find! will trigger the merge however
 ledger = Riak::Ledger.find!(client["ledgers"], "player_2", options)
 
-ledger.has_transaction? "txn3" #false
-ledger.has_transaction? "txn4" #true
-ledger.has_transaction? "txn5" #true
-ledger.has_transaction? "txn6" #true
+ledger.has_request_id? "req3" #false
+ledger.has_request_id? "req4" #true
+ledger.has_request_id? "req5" #true
+ledger.has_request_id? "req6" #true
 ```
 
 ### Deleting a ledger

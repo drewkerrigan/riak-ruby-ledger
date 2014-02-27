@@ -1,6 +1,7 @@
 require 'ledger/version'
 require 'crdt/tpncounter'
 require 'json'
+require 'securerandom'
 
 module Riak
   class Ledger
@@ -12,10 +13,8 @@ module Riak
     # @param [Hash] options
     #   {
     #     :actor [String]: default Thread.current["name"] || "ACTOR1"
-    #     :history_length [Integer]: default 10
-    #     :merge_history_length [Integer]: default 50 - number of recently merged transactions to keep track of
-    #        (should be equal to number of actors that may act on a given ledger at the same time)
     #     :retry_count [Integer]: default 10
+    #     :history_length [Integer]: default 50
     #   }
     def initialize(bucket, key, options={})
       raise ArgumentError, 'Argument "bucket" must have "allow_mult" property set to true' unless bucket.allow_mult
@@ -26,8 +25,7 @@ module Riak
 
       self.counter_options = {}
       self.counter_options[:actor] = options[:actor] || Thread.current["name"] || "ACTOR1"
-      self.counter_options[:history_length] = options[:history_length] || 10
-      self.counter_options[:merge_history_length] = options[:merge_history_length] || 50
+      self.counter_options[:history_length] = options[:history_length] || 50
       self.counter = Riak::CRDT::TPNCounter.new(self.counter_options)
     end
 
@@ -50,53 +48,54 @@ module Riak
     end
 
     # Increment the counter, merge and save it
-    # @param [String] transaction
     # @param [Positive Integer] value
-    # @see update!(transaction, value)
+    # @param [String] request_id
+    # @see update!(value, request_id)
     # @return [Boolean]
-    def credit!(transaction, value)
-      self.update!(transaction, value)
+    def credit!(value, request_id=nil)
+      self.update!(value, request_id)
     end
 
     # Decrement the counter, merge and save it
-    # @param [String] transaction
     # @param [Positive Integer] value
-    # @see update!(transaction, value)
+    # @param [String] request_id
+    # @see update!(value, request_id)
     # @return [Boolean]
-    def debit!(transaction, value)
-      self.update!(transaction, value * -1)
+    def debit!(value, request_id=nil)
+      self.update!(value * -1, request_id)
     end
 
     # Update the counter, merge and save it. Retry if unsuccessful
-    # @param [String] transaction
     # @param [Integer] value
-    # @param [Integer] current_retry
-    # @return [Boolean]
-    def update!(transaction, value, current_retry=nil)
+    # @param [String] request_id (optional, created if not given)
+    # @param [Integer] current_retry (optional / internal increment value)
+    # @return [Boolean true if successful, String request_id if not]
+    def update!(value, request_id=nil, current_retry=nil)
+      request_id = SecureRandom.uuid unless request_id
+
       # Failure case, not able to successfully complete the operation, retry a.s.a.p.
       if current_retry && current_retry <= 0
-        return false
+        return request_id
       end
 
       # Get the current merged state of this counter
       vclock = self.refresh()
 
-
-      if self.has_transaction?(transaction)
-        # If the transaction already exists in the counter, no problem
+      if self.has_request_id?(request_id)
+        # If the request_id already exists in the counter, return success
         return true
       else
-        # If the transaction doesn't exist, attempt to add it and save
+        # If the request_id doesn't exist, attempt to add it and save
         if value < 0
-          self.counter.decrement(transaction, value * -1)
+          self.counter.decrement(request_id, value * -1)
         else
-          self.counter.increment(transaction, value)
+          self.counter.increment(request_id, value)
         end
 
         unless self.save(vclock)
           # If the save wasn't successful, retry
           current_retry = self.retry_count unless current_retry
-          self.update!(transaction, value, current_retry - 1)
+          self.update!(value, request_id, current_retry - 1)
         else
           # If the save succeeded, no problem
           return true
@@ -104,11 +103,11 @@ module Riak
       end
     end
 
-    # Check if the counter has transaction
-    # @param [String] transaction
+    # Check if the counter has request_id
+    # @param [String] request_id
     # @return [Boolean]
-    def has_transaction?(transaction)
-      self.counter.has_transaction?(transaction)
+    def has_request_id?(request_id)
+      self.counter.has_request_id?(request_id)
     end
 
     # Calculate the current value of the counter
