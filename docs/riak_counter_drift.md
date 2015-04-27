@@ -38,7 +38,7 @@ Riak Counters are very well suited for certain problems:
 
 ### Counter Drift
 
-Riak Counters (and GSets in general) as currently implemented are not ***idempotent***. This simply means that you cannot retry the same increment or decrement operation more than once.
+Riak Counters (and GCounters in general) as currently implemented are not ***idempotent***. This simply means that you cannot retry the same increment or decrement operation more than once.
 
 Take the following scenario into consideration:
 
